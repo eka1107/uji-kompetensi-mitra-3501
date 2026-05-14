@@ -313,7 +313,7 @@ export default function AdminDashboard() {
           </style>
         </head>
         <body>
-          <h2>Rekapitulasi Hasil Uji Kompetensi Mitra Tambahan 2026</h2>
+          <h2>Hasil Uji Kompetensi Mitra Tambahan 2026</h2>
           <p><strong>Filter Status:</strong> ${filterStatus} | <strong>Kecamatan:</strong> ${filterKecamatan} | <strong>Desa:</strong> ${filterDesa}</p>
           <table>
             <thead>
