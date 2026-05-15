@@ -29,9 +29,14 @@ export default function QuizArea() {
   const [showMap, setShowMap] = useState(false); 
   const [loadingLogo, setLoadingLogo] = useState(LOGO_BPS);
   
+  // --- STATE KEAMANAN BARU ---
+  const [endTimeTarget, setEndTimeTarget] = useState(null); // Timer absolut dunia nyata
+  const sessionToken = useRef(Math.random().toString(36).substring(2)); // Token unik tab
+
   const submitRef = useRef(null);
   const isSubmitting = useRef(false);
 
+  // 1. Mencegah Back Button
   useEffect(() => {
     window.history.pushState(null, null, window.location.href);
     const handlePopState = () => { window.history.pushState(null, null, window.location.href); };
@@ -39,6 +44,19 @@ export default function QuizArea() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // 2. Mencegah Refresh / Keluar Halaman Tanpa Sengaja
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (view === 'quiz' && !isSubmitting.current) {
+        e.preventDefault();
+        e.returnValue = 'Data ujian Anda akan hilang. Lanjutkan?';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [view]);
+
+  // 3. Efek Loading Logo
   useEffect(() => {
     let logoTimer;
     if (view === 'saving') {
@@ -47,6 +65,7 @@ export default function QuizArea() {
     return () => clearInterval(logoTimer);
   }, [view]);
 
+  // 4. Deteksi Pelanggaran, Notifikasi & Layar Penuh
   useEffect(() => {
     if (view === 'quiz') {
       const handleContextMenu = (e) => { e.preventDefault(); };
@@ -62,9 +81,12 @@ export default function QuizArea() {
         setWarnings(prev => {
           const newWarnings = prev + 1;
           if (newWarnings >= 10) { 
-             if (!isSubmitting.current && submitRef.current) submitRef.current(); 
-          } 
-          else { 
+             if (!isSubmitting.current && submitRef.current) {
+               // SUBMIT OTOMATIS SAAT PELANGGARAN MAKSIMAL
+               alert("Batas pelanggaran sistem (10x) telah tercapai. Jawaban Anda disubmit secara otomatis!");
+               submitRef.current(); 
+             }
+          } else { 
             setShowWarningModal(true); 
           }
           return newWarnings;
@@ -90,35 +112,70 @@ export default function QuizArea() {
     }
   }, [view]);
 
+  // 5. Pencegah Login di 2 Tab Berbeda (Dalam Browser Sama)
   useEffect(() => {
-    let timer;
-    if (view === 'quiz' && timeLeft > 0) {
-      timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000);
-    } else if (timeLeft === 0 && view === 'quiz') {
-      if (!isSubmitting.current && submitRef.current) submitRef.current();
+    if (view === 'quiz') {
+      localStorage.setItem('active_se2026_quiz_' + user.email, sessionToken.current);
+      const handleStorageChange = (e) => {
+        if (e.key === 'active_se2026_quiz_' + user.email && e.newValue !== sessionToken.current) {
+          if (!isSubmitting.current && submitRef.current) {
+            alert("Aktivitas mencurigakan! Anda terdeteksi membuka ujian di tab/perangkat lain. Sesi ini otomatis dihentikan.");
+            submitRef.current();
+          }
+        }
+      };
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
     }
-    return () => clearInterval(timer);
-  }, [view, timeLeft]);
+  }, [view, user.email]);
+
+  // 6. Absolute Timer (Kebal terhadap layar mati/minimize)
+  useEffect(() => {
+    if (view !== 'quiz' || !endTimeTarget) return;
+    
+    const timerId = setInterval(() => {
+      const remainingMs = endTimeTarget - Date.now();
+      const remainingSec = Math.ceil(remainingMs / 1000);
+      
+      if (remainingSec <= 0) {
+        setTimeLeft(0);
+        clearInterval(timerId);
+        // SUBMIT OTOMATIS SAAT WAKTU HABIS
+        if (!isSubmitting.current && submitRef.current) {
+           alert("Waktu ujian telah habis! Jawaban Anda sedang dikirim ke server.");
+           submitRef.current();
+        }
+      } else {
+        setTimeLeft(remainingSec);
+      }
+    }, 1000);
+    
+    return () => clearInterval(timerId);
+  }, [view, endTimeTarget]);
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting.current) return; 
     isSubmitting.current = true;
 
     setView('saving');
+    // Hapus sesi lokal agar tidak mengganggu ujian berikutnya
+    localStorage.removeItem('active_se2026_quiz_' + user.email);
+
     let correct = 0;
     const detailJawaban = [];
     
-    quizData.forEach(q => {
-      // ---> INI LOGIKA ASLI KAKAK YANG AMAN 100% <---
-      const userAnswer = answers[q.id] || ""; 
-      const isCorrect = userAnswer === q.answer ? 1 : 0;
+    (quizData || []).forEach(q => {
+      if (!q) return; 
+      
+      const userAnswer = answers[q?.id] || ""; 
+      const isCorrect = userAnswer === q?.answer ? 1 : 0;
       if (isCorrect) correct++;
       
-      const textJawaban = q.shuffledOptions.find(o => o.key === userAnswer)?.text || "-";
-      detailJawaban.push({ soal: q.text, jawaban: textJawaban, nilai: isCorrect });
+      const textJawaban = (q?.shuffledOptions || []).find(o => o?.key === userAnswer)?.text || "-";
+      detailJawaban.push({ soal: q?.text || "-", jawaban: textJawaban, nilai: isCorrect });
     });
     
-    const finalScore = Math.round((correct / quizData.length) * 100);
+    const finalScore = quizData.length > 0 ? Math.round((correct / quizData.length) * 100) : 0;
     const endTime = getLocalTime();
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
 
@@ -140,6 +197,9 @@ export default function QuizArea() {
   const startQuiz = () => {
     try { const elem = document.documentElement; if (elem.requestFullscreen) { elem.requestFullscreen(); } } catch (e) {}
     try { fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "mulai_sesi", email: user.email, waktu_mulai: getLocalTime() }) }); } catch(e){}
+    
+    // MULAI MENGHITUNG WAKTU REAL-TIME DUNIA NYATA
+    setEndTimeTarget(Date.now() + (jadwalServer.durasi * 60 * 1000));
     setView('quiz');
   };
 
@@ -150,34 +210,34 @@ export default function QuizArea() {
   // ==========================================
   if (view === 'instructions') {
     return (
-      <div className="min-h-[100svh] w-screen flex items-center justify-center p-4 py-10 relative bg-transparent">
-        <div className="max-w-[650px] w-full bg-white/95 backdrop-blur-xl rounded-[32px] animate-fade-up border border-white shadow-2xl flex flex-col relative">
-          <div className="p-6 border-b border-slate-100 text-center bg-white rounded-t-[32px] relative">
-            <button onClick={handleKeluar} className="absolute right-5 top-5 p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:border-red-200"><LogOut size={14} /> Keluar</button>
-            <BookOpen className="w-10 h-10 text-orange-500 mx-auto mb-3" />
-            <h1 className="text-xl font-black text-slate-800 tracking-tight uppercase">Instruksi Pengerjaan</h1>
-            <p className="text-slate-500 mt-2 text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Uji Kompetensi Calon Mitra Tambahan 2026,<br/><span className="font-black text-orange-600 text-sm">{user.namaLengkap || user.email}</span></p>
+      <div className="min-h-[100dvh] w-screen flex items-center justify-center p-3 sm:p-4 py-6 sm:py-10 relative bg-transparent">
+        <div className="max-w-[650px] w-full bg-white/95 backdrop-blur-xl rounded-[24px] sm:rounded-[32px] animate-fade-up border border-white shadow-2xl flex flex-col relative">
+          <div className="p-4 sm:p-6 border-b border-slate-100 text-center bg-white rounded-t-[24px] sm:rounded-t-[32px] relative">
+            <button onClick={handleKeluar} className="absolute right-3 top-4 sm:right-5 sm:top-5 p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl flex items-center gap-1 sm:gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border border-slate-200"><LogOut size={12} /> Keluar</button>
+            <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-orange-500 mx-auto mb-2 sm:mb-3" />
+            <h1 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight uppercase">Instruksi Pengerjaan</h1>
+            <p className="text-slate-500 mt-1 sm:mt-2 text-[10px] sm:text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Uji Kompetensi Calon Mitra Tambahan 2026,<br/><span className="font-black text-orange-600 text-[11px] sm:text-sm">{user.namaLengkap || user.email}</span></p>
           </div>
-          <div className="p-6 space-y-4 flex flex-col">
-             <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-4 rounded-[20px] flex items-center gap-3 shadow-lg shadow-orange-200 border border-orange-400">
-                   <Clock className="w-8 h-8 opacity-80" />
-                   <div><p className="text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Durasi Ujian</p><p className="text-xl font-black leading-none">{jadwalServer.durasi} Menit</p></div>
+          <div className="p-4 sm:p-6 space-y-3 sm:space-y-4 flex flex-col">
+             <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-2 sm:gap-3 shadow-lg shadow-orange-200">
+                   <Clock className="w-6 h-6 sm:w-8 sm:h-8 opacity-80" />
+                   <div><p className="text-[8px] sm:text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Durasi</p><p className="text-base sm:text-xl font-black leading-none">{jadwalServer.durasi} Mnt</p></div>
                 </div>
-                <div className="bg-gradient-to-br from-[#facc15] to-[#eab308] text-slate-900 p-4 rounded-[20px] flex items-center gap-3 shadow-lg shadow-yellow-200 border border-yellow-300">
-                   <Database className="w-8 h-8 opacity-80" />
-                   <div><p className="text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Total Soal</p><p className="text-xl font-black leading-none">{quizData.length} Butir</p></div>
+                <div className="bg-gradient-to-br from-[#facc15] to-[#eab308] text-slate-900 p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-2 sm:gap-3 shadow-lg shadow-yellow-200">
+                   <Database className="w-6 h-6 sm:w-8 sm:h-8 opacity-80" />
+                   <div><p className="text-[8px] sm:text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Soal</p><p className="text-base sm:text-xl font-black leading-none">{quizData.length} Butir</p></div>
                 </div>
              </div>
-             <div className="bg-slate-50 p-5 rounded-[24px] border border-slate-200 space-y-3">
-                <div className="flex gap-3"><div className="mt-0.5"><Lock className="text-orange-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Mode Layar Terkunci</p><p className="text-[11px] text-slate-500 font-medium">Sistem akan meminta akses fullscreen untuk kenyamanan pengerjaan.</p></div></div>
-                <div className="flex gap-3"><div className="mt-0.5"><ShieldAlert className="text-red-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Dilarang Salin Data</p><p className="text-[11px] text-slate-500 font-medium">Fitur screenshot & copy-paste dinonaktifkan untuk keamanan soal.</p></div></div>
-                <div className="flex gap-3"><div className="mt-0.5"><AlertTriangle className="text-orange-600 w-4 h-4" /></div><div><p className="text-xs font-black text-orange-600">Sistem Deteksi Aktivitas</p><p className="text-[11px] text-slate-600 font-bold">Harap tidak berpindah aplikasi. Batas toleransi gangguan adalah 10 kali.</p></div></div>
-                <div className="flex gap-3"><div className="mt-0.5"><CheckCircle2 className="text-blue-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Hanya 1 Kali Percobaan</p><p className="text-[11px] text-slate-500 font-medium">Ujian ini hanya dapat dikerjakan satu kali per peserta dan bersifat final setelah dikirim.</p></div></div>
+             <div className="bg-slate-50 p-4 sm:p-5 rounded-[16px] sm:rounded-[24px] border border-slate-200 space-y-2 sm:space-y-3">
+                <div className="flex gap-2.5 sm:gap-3"><div className="mt-0.5"><Lock className="text-orange-500 w-3.5 h-3.5 sm:w-4 sm:h-4" /></div><div><p className="text-[11px] sm:text-xs font-black text-slate-700">Mode Layar Terkunci</p><p className="text-[9px] sm:text-[11px] text-slate-500 font-medium leading-snug">Sistem meminta akses fullscreen untuk kenyamanan.</p></div></div>
+                <div className="flex gap-2.5 sm:gap-3"><div className="mt-0.5"><ShieldAlert className="text-red-500 w-3.5 h-3.5 sm:w-4 sm:h-4" /></div><div><p className="text-[11px] sm:text-xs font-black text-slate-700">Dilarang Salin Data</p><p className="text-[9px] sm:text-[11px] text-slate-500 font-medium leading-snug">Fitur screenshot & copy-paste dinonaktifkan.</p></div></div>
+                <div className="flex gap-2.5 sm:gap-3"><div className="mt-0.5"><AlertTriangle className="text-orange-600 w-3.5 h-3.5 sm:w-4 sm:h-4" /></div><div><p className="text-[11px] sm:text-xs font-black text-orange-600">Sistem Deteksi Aktivitas</p><p className="text-[9px] sm:text-[11px] text-slate-600 font-bold leading-snug">Batas toleransi keluar aplikasi/notif adalah 10 kali.</p></div></div>
+                <div className="flex gap-2.5 sm:gap-3"><div className="mt-0.5"><CheckCircle2 className="text-blue-500 w-3.5 h-3.5 sm:w-4 sm:h-4" /></div><div><p className="text-[11px] sm:text-xs font-black text-slate-700">Hanya 1 Kali Percobaan</p><p className="text-[9px] sm:text-[11px] text-slate-500 font-medium leading-snug">Ujian bersifat final setelah dikirim.</p></div></div>
              </div>
           </div>
-          <div className="p-6 pt-0">
-            <button onClick={startQuiz} className="w-full bg-[#1A1A1B] font-black py-4 rounded-2xl shadow-xl hover:scale-[1.02] text-white flex justify-center items-center gap-2 uppercase tracking-widest text-xs transition-all">SAYA MENGERTI, MULAI UJIAN <ArrowRight size={16}/></button>
+          <div className="p-4 sm:p-6 pt-0">
+            <button onClick={startQuiz} className="w-full bg-[#1A1A1B] font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl shadow-xl active:scale-95 text-white flex justify-center items-center gap-2 uppercase tracking-widest text-[10px] sm:text-xs transition-all">SAYA MENGERTI, MULAI UJIAN <ArrowRight size={14}/></button>
           </div>
         </div>
       </div>
@@ -186,32 +246,32 @@ export default function QuizArea() {
 
   if (view === 'saving') {
     return (
-      <div className="h-[100svh] flex flex-col items-center justify-center relative bg-transparent">
-        <img src={loadingLogo} className="w-20 h-20 mb-6 transition-all duration-300 object-contain drop-shadow-md" alt="Logo" onError={(e) => e.target.style.display = 'none'} />
-        <Loader2 className="w-10 h-10 animate-spin text-orange-500 mb-4"/>
-        <p className="font-black text-slate-500 uppercase tracking-widest text-xs">Menyimpan Hasil Ujian...</p>
+      <div className="h-[100dvh] flex flex-col items-center justify-center relative bg-transparent">
+        <img src={loadingLogo} className="w-16 h-16 sm:w-20 sm:h-20 mb-6 transition-all duration-300 object-contain drop-shadow-md" alt="Logo" onError={(e) => e.target.style.display = 'none'} />
+        <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 animate-spin text-orange-500 mb-4"/>
+        <p className="font-black text-slate-500 uppercase tracking-widest text-[10px] sm:text-xs">Menyimpan Hasil...</p>
       </div>
     );
   }
 
   if (view === 'quiz') {
     const q = quizData[currentQuestion];
-    if(!q) return null;
+    if(!q) return <div className="h-[100dvh] flex items-center justify-center text-slate-400 font-bold text-sm">Memuat data soal...</div>;
     
     return (
-      <div className="h-[100svh] w-screen flex flex-col font-sans select-none relative overflow-hidden bg-transparent">
+      <div className="h-[100dvh] w-screen flex flex-col font-sans select-none relative overflow-hidden bg-transparent">
         {appModal.show && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-[24px] max-w-sm w-full p-8 text-center animate-scale-in shadow-2xl">
-              <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-              <h3 className="font-bold text-lg mb-2">{appModal.title}</h3>
-              <p className="text-slate-500 text-sm mb-6">{appModal.message}</p>
+            <div className="bg-white rounded-[24px] max-w-sm w-full p-6 sm:p-8 text-center animate-scale-in shadow-2xl">
+              <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-orange-500 mx-auto mb-4" />
+              <h3 className="font-bold text-base sm:text-lg mb-2">{appModal.title}</h3>
+              <p className="text-slate-500 text-xs sm:text-sm mb-6">{appModal.message}</p>
               {appModal.type === 'alert' ? (
-                <button onClick={() => setAppModal({ show: false })} className="w-full bg-[#1A1A1B] text-white font-bold py-3 rounded-xl uppercase tracking-widest text-xs">Kembali</button>
+                <button onClick={() => setAppModal({ show: false })} className="w-full bg-[#1A1A1B] text-white font-bold py-3 rounded-xl uppercase tracking-widest text-[10px] sm:text-xs">Kembali</button>
               ) : (
                 <div className="flex gap-3">
-                  <button onClick={() => setAppModal({ show: false })} className="flex-1 bg-slate-100 font-bold py-3 rounded-xl text-slate-700 uppercase tracking-widest text-xs">Batal</button>
-                  <button onClick={() => { setAppModal({ show: false }); handleSubmit(); }} className="flex-1 bg-orange-500 font-bold py-3 rounded-xl text-white uppercase tracking-widest text-xs">Ya, Kirim</button>
+                  <button onClick={() => setAppModal({ show: false })} className="flex-1 bg-slate-100 font-bold py-3 rounded-xl text-slate-700 uppercase tracking-widest text-[10px] sm:text-xs">Batal</button>
+                  <button onClick={() => { setAppModal({ show: false }); handleSubmit(); }} className="flex-1 bg-orange-500 font-bold py-3 rounded-xl text-white uppercase tracking-widest text-[10px] sm:text-xs">Ya, Kirim</button>
                 </div>
               )}
             </div>
@@ -220,54 +280,55 @@ export default function QuizArea() {
 
         {showWarningModal && (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[32px] max-w-sm w-full p-8 text-center animate-scale-in shadow-2xl">
-              <ShieldAlert className="w-16 h-16 text-orange-500 mx-auto mb-5" />
-              <h3 className="font-black text-xl mb-3 text-[#1A1A1B] uppercase tracking-tight">Gangguan Terdeteksi</h3>
-              <p className="text-slate-600 mb-6 text-sm font-bold leading-relaxed">Sistem mendeteksi Anda keluar dari halaman atau menerima notifikasi/panggilan. Pelanggaran ke-{warnings}/10.</p>
-              <button onClick={() => setShowWarningModal(false)} className="w-full bg-[#1A1A1B] text-white font-black py-4 rounded-xl hover:bg-black uppercase tracking-widest text-xs transition-colors">Lanjutkan Ujian</button>
+            <div className="bg-white rounded-[24px] max-w-sm w-full p-6 sm:p-8 text-center animate-scale-in shadow-2xl">
+              <ShieldAlert className="w-12 h-12 sm:w-16 sm:h-16 text-orange-500 mx-auto mb-4 sm:mb-5" />
+              <h3 className="font-black text-lg sm:text-xl mb-2 sm:mb-3 text-[#1A1A1B] uppercase tracking-tight">Gangguan Terdeteksi</h3>
+              <p className="text-slate-600 mb-5 sm:mb-6 text-xs sm:text-sm font-bold leading-relaxed">Sistem mendeteksi Anda keluar dari halaman/notifikasi. Pelanggaran ke-{warnings}/10.</p>
+              <button onClick={() => setShowWarningModal(false)} className="w-full bg-[#1A1A1B] text-white font-black py-3 sm:py-4 rounded-xl hover:bg-black uppercase tracking-widest text-[10px] sm:text-xs transition-colors">Lanjutkan Ujian</button>
             </div>
           </div>
         )}
 
-        <header className="bg-white/90 backdrop-blur-md px-4 md:px-6 h-[70px] flex items-center justify-between z-40 shrink-0 border-b border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <img src={LOGO_BPS} className="w-9 h-9 object-contain drop-shadow-sm" alt="Logo" />
-            <div className="font-black text-xs md:text-sm hidden sm:block tracking-tight text-slate-800 uppercase">Uji Kompetensi Calon Mitra Tambahan 2026</div>
+        <header className="bg-white/90 backdrop-blur-md px-3 sm:px-6 h-[60px] sm:h-[70px] flex items-center justify-between z-40 shrink-0 border-b border-slate-200 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src={LOGO_BPS} className="w-7 h-7 sm:w-9 sm:h-9 object-contain drop-shadow-sm" alt="Logo" />
+            <div className="font-black text-[10px] sm:text-sm tracking-tight text-slate-800 uppercase hidden xs:block line-clamp-1 max-w-[120px] sm:max-w-none">Uji Kompetensi 2026</div>
           </div>
-          <div className="flex gap-3 items-center">
+          <div className="flex gap-2 sm:gap-3 items-center">
              <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-full shadow-sm">
                 <User className="w-4 h-4 text-orange-500" />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-700 truncate max-w-[150px]">{user.namaLengkap || user.email}</span>
              </div>
-             <div className={`font-mono text-sm md:text-base font-black px-6 py-2 rounded-full shadow-lg border-2 flex items-center gap-2 transition-all ${timeLeft < 300 ? 'bg-red-500 text-white border-red-600 animate-pulse' : 'bg-gradient-to-r from-[#ffe16f] to-[#facc15] text-[#1A1A1B] border-yellow-400'}`}>
-                <Clock size={16} />{formatTime(timeLeft)}
+             <div className={`font-mono text-xs sm:text-base font-black px-4 sm:px-6 py-1.5 sm:py-2 rounded-full shadow-lg border-2 flex items-center gap-1.5 sm:gap-2 transition-all ${timeLeft < 300 ? 'bg-red-500 text-white border-red-600 animate-pulse' : 'bg-gradient-to-r from-[#ffe16f] to-[#facc15] text-[#1A1A1B] border-yellow-400'}`}>
+                <Clock size={14} className="sm:w-4 sm:h-4"/>{formatTime(timeLeft)}
              </div>
           </div>
         </header>
 
-        <main className="flex-1 flex flex-col md:flex-row max-w-[1200px] w-full mx-auto p-3 md:p-5 gap-4 min-h-0">
-          <button onClick={() => setShowMap(!showMap)} className="md:hidden w-full bg-white p-3.5 rounded-2xl font-black text-xs text-slate-700 shadow-md border border-slate-100 uppercase tracking-widest flex items-center justify-center gap-2 shrink-0">
-            {showMap ? <XCircle size={16}/> : <BarChart3 size={16}/>} {showMap ? "Tutup Peta Soal" : "Navigasi Peta Soal"}
+        <main className="flex-1 flex flex-col md:flex-row max-w-[1200px] w-full mx-auto p-2 sm:p-3 md:p-5 gap-2 sm:gap-4 min-h-0">
+          <button onClick={() => setShowMap(!showMap)} className="md:hidden w-full bg-white p-2.5 sm:p-3.5 rounded-[14px] sm:rounded-2xl font-black text-[10px] sm:text-xs text-slate-700 shadow-sm border border-slate-100 uppercase tracking-widest flex items-center justify-center gap-2 shrink-0">
+            {showMap ? <XCircle size={14}/> : <BarChart3 size={14}/>} {showMap ? "Tutup Peta Soal" : "Navigasi Peta Soal"}
           </button>
 
           <div className={`flex-1 flex-col min-h-0 ${showMap ? 'hidden md:flex' : 'flex'}`}>
-            <div className="bg-white/90 backdrop-blur-md rounded-[24px] flex-1 flex flex-col shadow-lg border border-white overflow-hidden relative min-h-0">
-              <div className="px-5 py-3 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-50 border border-slate-200 px-3 py-1 rounded-full shadow-sm">Soal {currentQuestion + 1} dari {quizData.length}</span>
-                {answers[q.id] && <button onClick={() => setAnswers(prev => { const n = {...prev}; delete n[q.id]; return n; })} className="text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded uppercase tracking-widest flex items-center gap-1.5 transition-colors"><Trash2 className="w-3.5 h-3.5"/> Batalkan Jawaban</button>}
+            <div className="bg-white/90 backdrop-blur-md rounded-[16px] sm:rounded-[24px] flex-1 flex flex-col shadow-sm sm:shadow-lg border border-white overflow-hidden relative min-h-0">
+              <div className="px-3 sm:px-5 py-2 sm:py-3 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
+                <span className="text-[9px] sm:text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-50 border border-slate-200 px-2.5 sm:px-3 py-1 rounded-full shadow-sm">Soal {currentQuestion + 1}/{quizData.length}</span>
+                {answers[q?.id] && <button onClick={() => setAnswers(prev => { const n = {...prev}; delete n[q?.id]; return n; })} className="text-[9px] sm:text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded uppercase tracking-widest flex items-center gap-1 sm:gap-1.5 transition-colors"><Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5"/> Batal</button>}
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
-                <h2 className="text-sm md:text-base font-bold text-slate-800 mb-4 md:mb-6 whitespace-pre-wrap leading-relaxed">{q.text}</h2>
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 custom-scrollbar">
+                <h2 className="text-[13px] sm:text-sm md:text-base font-bold text-slate-800 mb-3 sm:mb-4 md:mb-6 whitespace-pre-wrap leading-relaxed">{q?.text || "Soal tidak tersedia"}</h2>
                 <div className="space-y-2 md:space-y-3">
-                  {q.shuffledOptions.map((opt, index) => {
+                  {(q?.shuffledOptions || []).map((opt, index) => {
+                    if (!opt) return null; 
                     const uiLabel = String.fromCharCode(65 + index); 
-                    const isSelected = answers[q.id] === opt.key; 
+                    const isSelected = answers[q?.id] === opt?.key; 
                     return (
-                      <label key={opt.key} onClick={() => setAnswers({...answers, [q.id]: opt.key})} className={`flex items-center p-3 md:p-4 rounded-[16px] cursor-pointer border-2 transition-all duration-200 ${isSelected ? 'border-orange-500 bg-orange-50 shadow-sm transform translate-x-1' : 'border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/30'}`}>
-                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-slate-50'}`}>{isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div>
-                        <span className={`font-black mr-2 text-xs md:text-sm ${isSelected ? 'text-orange-700' : 'text-slate-400'}`}>{uiLabel}.</span>
-                        <span className={`text-[13px] md:text-sm font-semibold leading-snug ${isSelected ? 'text-orange-900' : 'text-slate-700'}`}>{opt.text}</span>
+                      <label key={opt?.key || index} onClick={() => setAnswers({...answers, [q?.id]: opt?.key})} className={`flex items-start sm:items-center p-2.5 sm:p-3 md:p-4 rounded-[12px] sm:rounded-[16px] cursor-pointer border-2 transition-all duration-200 ${isSelected ? 'border-orange-500 bg-orange-50 shadow-sm transform sm:translate-x-1' : 'border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/30'}`}>
+                        <div className={`w-4 h-4 sm:w-5 sm:h-5 rounded-full border-2 mr-2 sm:mr-3 flex items-center justify-center shrink-0 transition-colors mt-0.5 sm:mt-0 ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-slate-50'}`}>{isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div>
+                        <span className={`font-black mr-1.5 sm:mr-2 text-[11px] sm:text-xs md:text-sm pt-0.5 sm:pt-0 ${isSelected ? 'text-orange-700' : 'text-slate-400'}`}>{uiLabel}.</span>
+                        <span className={`text-[12px] sm:text-[13px] md:text-sm font-semibold leading-snug ${isSelected ? 'text-orange-900' : 'text-slate-700'}`}>{opt?.text || "-"}</span>
                       </label>
                     );
                   })}
@@ -275,38 +336,40 @@ export default function QuizArea() {
               </div>
             </div>
 
-            <div className="flex justify-between mt-4 shrink-0 gap-3">
-              <button onClick={() => setCurrentQuestion(p => Math.max(0, p - 1))} disabled={currentQuestion === 0} className="px-6 py-4 bg-white border border-slate-200 rounded-xl font-black text-slate-600 shadow-md disabled:opacity-40 uppercase tracking-widest text-xs flex-1 md:flex-none transition-all active:scale-95"><ChevronLeft size={18} className="inline mr-1" /> Kembali</button>
+            <div className="flex justify-between mt-2 sm:mt-4 shrink-0 gap-2 sm:gap-3">
+              <button onClick={() => setCurrentQuestion(p => Math.max(0, p - 1))} disabled={currentQuestion === 0} className="px-4 sm:px-6 py-3 sm:py-4 bg-white border border-slate-200 rounded-[12px] sm:rounded-xl font-black text-slate-600 shadow-sm disabled:opacity-40 uppercase tracking-widest text-[9px] sm:text-[10px] md:text-xs flex-1 md:flex-none transition-all active:scale-95 flex items-center justify-center"><ChevronLeft size={14} className="mr-1" /> Kembali</button>
+              
               {currentQuestion === quizData.length - 1 ? (
                 <button onClick={() => {
                   const unanswered = quizData.length - Object.keys(answers).length;
-                  if (unanswered > 0) setAppModal({ show: true, type: 'alert', title: 'Belum Selesai', message: `Harap selesaikan semua jawaban. Masih ada ${unanswered} soal yang belum dijawab.`});
-                  else setAppModal({ show: true, type: 'confirm', title: 'Kirim Jawaban', message: 'Anda tidak dapat mengubah jawaban lagi setelah dikirim. Kirim sekarang?'});
-                }} className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 font-black rounded-xl shadow-lg shadow-orange-200 text-white uppercase tracking-widest text-xs flex-1 md:flex-none transition-all active:scale-95">Selesai & Kirim</button>
+                  if (unanswered > 0) setAppModal({ show: true, type: 'alert', title: 'Belum Selesai', message: `Harap selesaikan semua jawaban. Masih ada ${unanswered} soal kosong.`});
+                  else setAppModal({ show: true, type: 'confirm', title: 'Kirim Jawaban', message: 'Anda tidak dapat mengubah jawaban lagi. Kirim sekarang?'});
+                }} className="px-4 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-orange-600 font-black rounded-[12px] sm:rounded-xl shadow-md shadow-orange-200 text-white uppercase tracking-widest text-[9px] sm:text-[10px] md:text-xs flex-1 md:flex-none transition-all active:scale-95 flex items-center justify-center">Kirim</button>
               ) : (
-                <button onClick={() => setCurrentQuestion(p => Math.min(quizData.length - 1, p + 1))} className="px-8 py-4 bg-[#1A1A1B] text-white font-black rounded-xl shadow-xl uppercase tracking-widest text-xs flex-1 md:flex-none transition-all active:scale-95">Selanjutnya <ChevronRight size={18} className="inline ml-1" /></button>
+                <button onClick={() => setCurrentQuestion(p => Math.min(quizData.length - 1, p + 1))} className="px-4 sm:px-8 py-3 sm:py-4 bg-[#1A1A1B] text-white font-black rounded-[12px] sm:rounded-xl shadow-md uppercase tracking-widest text-[9px] sm:text-[10px] md:text-xs flex-1 md:flex-none transition-all active:scale-95 flex items-center justify-center">Lanjut <ChevronRight size={14} className="ml-1" /></button>
               )}
             </div>
           </div>
 
           <div className={`${showMap ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-shrink-0 flex-col min-h-0 h-max md:h-full flex`}>
-            <div className="bg-white/90 backdrop-blur-md rounded-[24px] p-5 flex flex-col h-full shadow-lg border border-white">
-              <div className="font-black text-[11px] uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><BarChart3 className="w-4 h-4 text-orange-500"/> Navigasi Peta Soal</div>
-              <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-5 gap-2 overflow-y-auto flex-1 content-start custom-scrollbar pr-1 pb-2">
-                {quizData.map((item, idx) => {
-                   const isAnswered = answers[item.id] !== undefined;
+            <div className="bg-white/90 backdrop-blur-md rounded-[16px] sm:rounded-[24px] p-4 sm:p-5 flex flex-col h-full shadow-sm sm:shadow-lg border border-white">
+              <div className="font-black text-[9px] sm:text-[11px] uppercase tracking-widest text-slate-400 mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2 border-b border-slate-100 pb-2.5 sm:pb-3"><BarChart3 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-500"/> Navigasi Soal</div>
+              <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-5 gap-1.5 sm:gap-2 overflow-y-auto flex-1 content-start custom-scrollbar pr-1 pb-2">
+                {(quizData || []).map((item, idx) => {
+                   if (!item) return null; 
+                   const isAnswered = answers[item?.id] !== undefined;
                    const isCurrent = currentQuestion === idx;
                    let btnClass = 'border-slate-200 bg-white text-slate-400 hover:border-slate-300';
                    
-                   if (isCurrent) btnClass = 'border-orange-500 bg-orange-500 text-white shadow-md scale-105 z-10';
-                   else if (isAnswered) btnClass = 'border-[#1A1A1B] bg-[#1A1A1B] text-white font-black shadow-sm';
+                   if (isCurrent) btnClass = 'border-orange-500 bg-orange-500 text-white shadow-sm scale-105 z-10';
+                   else if (isAnswered) btnClass = 'border-[#1A1A1B] bg-[#1A1A1B] text-white font-black';
                    
-                   return <button key={item.id} onClick={() => { setCurrentQuestion(idx); if(window.innerWidth < 768) setShowMap(false); }} className={`h-11 md:h-12 text-xs font-black rounded-[14px] border-2 transition-all duration-200 flex items-center justify-center ${btnClass}`}>{idx + 1}</button>;
+                   return <button key={item?.id || idx} onClick={() => { setCurrentQuestion(idx); if(window.innerWidth < 768) setShowMap(false); }} className={`h-9 sm:h-11 md:h-12 text-[10px] sm:text-xs font-black rounded-[10px] sm:rounded-[14px] border-2 transition-all duration-200 flex items-center justify-center ${btnClass}`}>{idx + 1}</button>;
                 })}
               </div>
-              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2">
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full bg-[#1A1A1B]"></div><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Terjawab</span></div>
-                <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full border-2 border-slate-300 bg-white"></div><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Kosong</span></div>
+              <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-100 grid grid-cols-2 gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2"><div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-[#1A1A1B]"></div><span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Terjawab</span></div>
+                <div className="flex items-center gap-1.5 sm:gap-2"><div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full border-2 border-slate-300 bg-white"></div><span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">Kosong</span></div>
               </div>
             </div>
           </div>
@@ -317,16 +380,16 @@ export default function QuizArea() {
 
   if (view === 'result') {
     return (
-      <div className="h-[100svh] w-screen flex items-center justify-center p-4 relative bg-transparent">
-        <div className="max-w-[450px] w-full bg-white/95 backdrop-blur-3xl rounded-[40px] p-10 text-center animate-fade-up border border-white shadow-2xl">
-          <div className="w-24 h-24 bg-emerald-50 rounded-[32px] flex items-center justify-center mx-auto mb-6 shadow-sm"><CheckCircle className="w-12 h-12 text-emerald-500" /></div>
-          <h1 className="text-3xl font-black text-slate-800 mb-3 tracking-tight">Berhasil Terkirim!</h1>
-          <p className="text-slate-500 text-sm mb-8 font-medium leading-relaxed">Terima kasih telah mengikuti Uji Kompetensi Mitra Tambahan 2026. Bukti pengerjaan telah diamankan di sistem kami.</p>
-          <div className="text-left bg-slate-50 p-6 rounded-[24px] mb-8 border border-slate-100">
-             <div className="flex justify-between border-b border-slate-200/50 pb-3 mb-3 items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peserta</span><span className="text-xs font-black text-slate-800">{user.email}</span></div>
-             <div className="flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span><span className="text-xs font-black text-slate-800">{getLocalTime().split(' ')[1]} WIB</span></div>
+      <div className="h-[100dvh] w-screen flex items-center justify-center p-4 relative bg-transparent">
+        <div className="max-w-[450px] w-full bg-white/95 backdrop-blur-3xl rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 text-center animate-fade-up border border-white shadow-2xl">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-sm"><CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500" /></div>
+          <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-2 sm:mb-3 tracking-tight">Berhasil Terkirim!</h1>
+          <p className="text-slate-500 text-xs sm:text-sm mb-6 sm:mb-8 font-medium leading-relaxed">Terima kasih telah mengikuti Uji Kompetensi Mitra Tambahan 2026. Bukti pengerjaan telah diamankan.</p>
+          <div className="text-left bg-slate-50 p-4 sm:p-6 rounded-[16px] sm:rounded-[24px] mb-6 sm:mb-8 border border-slate-100">
+             <div className="flex justify-between border-b border-slate-200/50 pb-2 sm:pb-3 mb-2 sm:mb-3 items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Peserta</span><span className="text-[10px] sm:text-xs font-black text-slate-800 truncate pl-2">{user.email}</span></div>
+             <div className="flex justify-between items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span><span className="text-[10px] sm:text-xs font-black text-slate-800">{getLocalTime().split(' ')[1]} WIB</span></div>
           </div>
-          <button onClick={handleKeluar} className="w-full bg-[#1A1A1B] hover:bg-black text-white font-black py-4 rounded-2xl flex justify-center gap-3 items-center uppercase tracking-widest text-xs transition-all shadow-xl">Kembali ke Beranda <LogOut size={16}/></button>
+          <button onClick={handleKeluar} className="w-full bg-[#1A1A1B] hover:bg-black text-white font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl flex justify-center gap-2 sm:gap-3 items-center uppercase tracking-widest text-[10px] sm:text-xs transition-all shadow-xl">Ke Beranda <LogOut size={14}/></button>
         </div>
       </div>
     );
