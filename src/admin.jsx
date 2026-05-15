@@ -398,7 +398,7 @@ export default function AdminDashboard() {
     setDaftarPeserta([{ ...newPeserta }, ...daftarPeserta]);
     fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "add_peserta", data: [newPeserta] }) });
     setNewPeserta({ email: '', password: '', nama: '', desa: '', kecamatan: 'Pacitan' });
-    showAlert('Sukses', 'Peserta berhasil ditambahkan.');
+    showAlert('Sukses', 'Peserta berhasil ditambahkan');
   };
 
   const handleEditPeserta = (e) => {
@@ -428,7 +428,7 @@ export default function AdminDashboard() {
     const csvContent = "data:text/csv;charset=utf-8,email,password,nama,kecamatan,desa\nmitra1@bps.go.id,sandi123,Budi Santoso,Pacitan,Ploso\nmitra2@bps.go.id,sandi456,Siti Aminah,Pacitan,Arjowinangun";
     const link = document.createElement("a");
     link.href = encodeURI(csvContent);
-    link.download = "Template_Data_Mitra_BPS.csv";
+    link.download = "Template_Data_Mitra.csv";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
