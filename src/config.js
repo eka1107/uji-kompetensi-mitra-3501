@@ -11,7 +11,7 @@ export function shuffleArray(array) {
 }
 
 export const getLocalTime = () => new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
-
+// lama loading
 export const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
