@@ -139,7 +139,7 @@ export default function ParticipantLogin() {
             <input required type="email" placeholder="Alamat Email Terdaftar" value={user.email} onChange={e => setUser({...user, email: e.target.value})} onBlur={e => checkEmail(e.target.value)} className="w-full px-4 py-3.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-500 outline-none font-medium transition-colors" />
             {emailWarning && <p className="text-red-500 text-[10px] mt-1.5 font-bold ml-2">{emailWarning}</p>}
           </div>
-          <input required type="text" placeholder="TOKEN UJIAN" value={user.token} onChange={e => setUser({...user, token: e.target.value})} className="w-full px-4 py-3.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-500 outline-none font-black tracking-[0.2em] text-center transition-colors" />
+          <input required type="text" placeholder="TOKEN UJIAN" value={user.token} onChange={e => setUser({...user, token: e.target.value})} autoCapitalize="none" className="w-full px-4 py-3.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-orange-500 outline-none font-black tracking-[0.2em] text-center transition-colors" />
           <button type="submit" disabled={isLoggingIn || emailWarning !== ''} className="w-full bg-[#ffe16f] hover:bg-[#facc15] text-[#1A1A1B] font-black py-4 rounded-xl shadow-lg shadow-yellow-200/50 hover-scale-up uppercase tracking-widest text-xs mt-2 disabled:opacity-50 transition-all">
             {isLoggingIn ? "Memverifikasi..." : "Masuk"}
           </button>

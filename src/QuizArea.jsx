@@ -153,7 +153,7 @@ export default function QuizArea() {
             <button onClick={handleKeluar} className="absolute right-5 top-5 p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-slate-200 hover:border-red-200"><LogOut size={14} /> Keluar</button>
             <BookOpen className="w-10 h-10 text-orange-500 mx-auto mb-3" />
             <h1 className="text-xl font-black text-slate-800 tracking-tight uppercase">Instruksi Pengerjaan</h1>
-            <p className="text-slate-500 mt-2 text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Tes Kompetensi Daring,<br/><span className="font-black text-orange-600 text-sm">{user.namaLengkap || user.email}</span></p>
+            <p className="text-slate-500 mt-2 text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Uji Kompetensi Calon Mitra Tambahan 2026,<br/><span className="font-black text-orange-600 text-sm">{user.namaLengkap || user.email}</span></p>
           </div>
           <div className="p-6 space-y-4 flex flex-col">
              <div className="grid grid-cols-2 gap-3">
@@ -170,7 +170,6 @@ export default function QuizArea() {
                 <div className="flex gap-3"><div className="mt-0.5"><Lock className="text-orange-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Mode Layar Terkunci</p><p className="text-[11px] text-slate-500 font-medium">Sistem akan meminta akses fullscreen untuk kenyamanan pengerjaan.</p></div></div>
                 <div className="flex gap-3"><div className="mt-0.5"><ShieldAlert className="text-red-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Dilarang Salin Data</p><p className="text-[11px] text-slate-500 font-medium">Fitur screenshot & copy-paste dinonaktifkan untuk keamanan soal.</p></div></div>
                 <div className="flex gap-3"><div className="mt-0.5"><AlertTriangle className="text-orange-600 w-4 h-4" /></div><div><p className="text-xs font-black text-orange-600">Sistem Deteksi Aktivitas</p><p className="text-[11px] text-slate-600 font-bold">Harap tidak berpindah aplikasi. Batas toleransi gangguan adalah 10 kali.</p></div></div>
-                {/* --- TAMBAHAN KETERANGAN 1 KALI PERCOBAAN --- */}
                 <div className="flex gap-3"><div className="mt-0.5"><CheckCircle2 className="text-blue-500 w-4 h-4" /></div><div><p className="text-xs font-black text-slate-700">Hanya 1 Kali Percobaan</p><p className="text-[11px] text-slate-500 font-medium">Ujian ini hanya dapat dikerjakan satu kali per peserta dan bersifat final setelah dikirim.</p></div></div>
              </div>
           </div>
@@ -197,7 +196,7 @@ export default function QuizArea() {
     if(!q) return null;
     
     return (
-      <div className="min-h-[100svh] w-screen flex flex-col font-sans select-none relative bg-transparent">
+      <div className="h-[100svh] w-screen flex flex-col font-sans select-none relative overflow-hidden bg-transparent">
         {appModal.show && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-[24px] max-w-sm w-full p-8 text-center animate-scale-in shadow-2xl">
@@ -227,10 +226,10 @@ export default function QuizArea() {
           </div>
         )}
 
-        <header className="bg-white/90 backdrop-blur-md px-4 md:px-6 h-[70px] flex items-center justify-between z-40 shrink-0 border-b border-slate-200 shadow-sm sticky top-0">
+        <header className="bg-white/90 backdrop-blur-md px-4 md:px-6 h-[70px] flex items-center justify-between z-40 shrink-0 border-b border-slate-200 shadow-sm">
           <div className="flex items-center gap-3">
             <img src={LOGO_BPS} className="w-9 h-9 object-contain drop-shadow-sm" alt="Logo" />
-            <div className="font-black text-sm hidden sm:block tracking-tight text-slate-800 uppercase">CAT Sensus Ekonomi</div>
+            <div className="font-black text-xs md:text-sm hidden sm:block tracking-tight text-slate-800 uppercase">Uji Kompetensi Calon Mitra Tambahan 2026</div>
           </div>
           <div className="flex gap-3 items-center">
              <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-full shadow-sm">
@@ -243,30 +242,30 @@ export default function QuizArea() {
           </div>
         </header>
 
-        <main className="flex-1 flex flex-col md:flex-row max-w-[1200px] w-full mx-auto p-3 md:p-5 gap-4">
+        <main className="flex-1 flex flex-col md:flex-row max-w-[1200px] w-full mx-auto p-3 md:p-5 gap-4 min-h-0">
           <button onClick={() => setShowMap(!showMap)} className="md:hidden w-full bg-white p-3.5 rounded-2xl font-black text-xs text-slate-700 shadow-md border border-slate-100 uppercase tracking-widest flex items-center justify-center gap-2 shrink-0">
             {showMap ? <XCircle size={16}/> : <BarChart3 size={16}/>} {showMap ? "Tutup Peta Soal" : "Navigasi Peta Soal"}
           </button>
 
-          <div className={`flex-1 flex-col ${showMap ? 'hidden md:flex' : 'flex'}`}>
-            <div className="bg-white/90 backdrop-blur-md rounded-[24px] flex-1 flex flex-col shadow-lg border border-white relative">
-              <div className="px-5 py-3 border-b border-slate-100 bg-white flex justify-between items-center rounded-t-[24px]">
+          <div className={`flex-1 flex-col min-h-0 ${showMap ? 'hidden md:flex' : 'flex'}`}>
+            <div className="bg-white/90 backdrop-blur-md rounded-[24px] flex-1 flex flex-col shadow-lg border border-white overflow-hidden relative min-h-0">
+              <div className="px-5 py-3 border-b border-slate-100 bg-white flex justify-between items-center shrink-0">
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-slate-50 border border-slate-200 px-3 py-1 rounded-full shadow-sm">Soal {currentQuestion + 1} dari {quizData.length}</span>
                 {answers[q.id] && <button onClick={() => setAnswers(prev => { const n = {...prev}; delete n[q.id]; return n; })} className="text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded uppercase tracking-widest flex items-center gap-1.5 transition-colors"><Trash2 className="w-3.5 h-3.5"/> Batalkan Jawaban</button>}
               </div>
               
-              {/* --- KOTAK SOAL SEKARANG TIDAK MEMILIKI BATAS SCROLL INTERNAL --- */}
-              <div className="p-5 md:p-8 flex-1">
-                <h2 className="text-base md:text-lg font-bold text-slate-800 mb-8 whitespace-pre-wrap leading-relaxed">{q.text}</h2>
-                <div className="space-y-3">
+              {/* --- KOTAK SOAL SUPER KOMPAK --- */}
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
+                <h2 className="text-sm md:text-base font-bold text-slate-800 mb-4 md:mb-6 whitespace-pre-wrap leading-relaxed">{q.text}</h2>
+                <div className="space-y-2 md:space-y-3">
                   {q.shuffledOptions.map((opt, index) => {
                     const uiLabel = String.fromCharCode(65 + index); 
                     const isSelected = answers[q.id] === opt.key; 
                     return (
-                      <label key={opt.key} onClick={() => setAnswers({...answers, [q.id]: opt.key})} className={`flex items-center p-4 rounded-[20px] cursor-pointer border-2 transition-all duration-200 ${isSelected ? 'border-orange-500 bg-orange-50 shadow-md transform translate-x-1' : 'border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/30'}`}>
-                        <div className={`w-6 h-6 rounded-full border-2 mr-4 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-slate-50'}`}>{isSelected && <div className="w-2 h-2 bg-white rounded-full"></div>}</div>
-                        <span className={`font-black mr-2 text-sm ${isSelected ? 'text-orange-700' : 'text-slate-400'}`}>{uiLabel}.</span>
-                        <span className={`text-sm md:text-base font-semibold leading-snug ${isSelected ? 'text-orange-900' : 'text-slate-700'}`}>{opt.text}</span>
+                      <label key={opt.key} onClick={() => setAnswers({...answers, [q.id]: opt.key})} className={`flex items-center p-3 md:p-4 rounded-[16px] cursor-pointer border-2 transition-all duration-200 ${isSelected ? 'border-orange-500 bg-orange-50 shadow-sm transform translate-x-1' : 'border-slate-100 bg-white hover:border-orange-200 hover:bg-orange-50/30'}`}>
+                        <div className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center shrink-0 transition-colors ${isSelected ? 'border-orange-500 bg-orange-500' : 'border-slate-300 bg-slate-50'}`}>{isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div>
+                        <span className={`font-black mr-2 text-xs md:text-sm ${isSelected ? 'text-orange-700' : 'text-slate-400'}`}>{uiLabel}.</span>
+                        <span className={`text-[13px] md:text-sm font-semibold leading-snug ${isSelected ? 'text-orange-900' : 'text-slate-700'}`}>{opt.text}</span>
                       </label>
                     );
                   })}
@@ -288,17 +287,17 @@ export default function QuizArea() {
             </div>
           </div>
 
-          <div className={`${showMap ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-shrink-0 flex-col`}>
-            <div className="bg-white/90 backdrop-blur-md rounded-[24px] p-5 flex flex-col shadow-lg border border-white sticky top-[90px]">
+          <div className={`${showMap ? 'flex' : 'hidden'} md:flex w-full md:w-[300px] flex-shrink-0 flex-col min-h-0 h-max md:h-full flex`}>
+            <div className="bg-white/90 backdrop-blur-md rounded-[24px] p-5 flex flex-col h-full shadow-lg border border-white">
               <div className="font-black text-[11px] uppercase tracking-widest text-slate-400 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3"><BarChart3 className="w-4 h-4 text-orange-500"/> Navigasi Peta Soal</div>
-              <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-5 gap-2 content-start pr-1 pb-2">
+              <div className="grid grid-cols-5 md:grid-cols-4 lg:grid-cols-5 gap-2 overflow-y-auto flex-1 content-start custom-scrollbar pr-1 pb-2">
                 {quizData.map((item, idx) => {
                    const isAnswered = answers[item.id] !== undefined;
                    const isCurrent = currentQuestion === idx;
                    let btnClass = 'border-slate-200 bg-white text-slate-400 hover:border-slate-300';
                    
                    if (isCurrent) btnClass = 'border-orange-500 bg-orange-500 text-white shadow-md scale-105 z-10';
-                   else if (isAnswered) btnClass = 'border-[#1A1A1B] bg-[#1A1A1B] text-white font-black shadow-sm'; // Warna Hitam
+                   else if (isAnswered) btnClass = 'border-[#1A1A1B] bg-[#1A1A1B] text-white font-black shadow-sm';
                    
                    return <button key={item.id} onClick={() => { setCurrentQuestion(idx); if(window.innerWidth < 768) setShowMap(false); }} className={`h-11 md:h-12 text-xs font-black rounded-[14px] border-2 transition-all duration-200 flex items-center justify-center ${btnClass}`}>{idx + 1}</button>;
                 })}
