@@ -107,10 +107,13 @@ export default function QuizArea() {
     setView('saving');
     let correct = 0;
     const detailJawaban = [];
+    
     quizData.forEach(q => {
+      // ---> INI LOGIKA ASLI KAKAK YANG AMAN 100% <---
       const userAnswer = answers[q.id] || ""; 
       const isCorrect = userAnswer === q.answer ? 1 : 0;
       if (isCorrect) correct++;
+      
       const textJawaban = q.shuffledOptions.find(o => o.key === userAnswer)?.text || "-";
       detailJawaban.push({ soal: q.text, jawaban: textJawaban, nilai: isCorrect });
     });
@@ -254,7 +257,6 @@ export default function QuizArea() {
                 {answers[q.id] && <button onClick={() => setAnswers(prev => { const n = {...prev}; delete n[q.id]; return n; })} className="text-[10px] font-black text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded uppercase tracking-widest flex items-center gap-1.5 transition-colors"><Trash2 className="w-3.5 h-3.5"/> Batalkan Jawaban</button>}
               </div>
               
-              {/* --- KOTAK SOAL SUPER KOMPAK --- */}
               <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
                 <h2 className="text-sm md:text-base font-bold text-slate-800 mb-4 md:mb-6 whitespace-pre-wrap leading-relaxed">{q.text}</h2>
                 <div className="space-y-2 md:space-y-3">
