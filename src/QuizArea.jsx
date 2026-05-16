@@ -17,46 +17,139 @@ export default function QuizArea() {
   const quizData = stateData.quizData || [];
   const jadwalServer = stateData.jadwalServer || { durasi: 45 };
   const attemptCount = stateData.attemptCount || 1;
-  const startTime = stateData.startTime || '';
+  
+  // Waktu mulai dari halaman login (sebagai cadangan)
+  const initialStartTime = stateData.startTime || '';
 
   const [view, setView] = useState('instructions'); 
-  const [answers, setAnswers] = useState({});
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(jadwalServer.durasi * 60); 
-  const [warnings, setWarnings] = useState(0);
-  const [showWarningModal, setShowWarningModal] = useState(false);
-  const [appModal, setAppModal] = useState({ show: false, type: '', message: '', title: '' });
   const [showMap, setShowMap] = useState(false); 
   const [loadingLogo, setLoadingLogo] = useState(LOGO_BPS);
-  
-  // --- STATE KEAMANAN BARU ---
-  const [endTimeTarget, setEndTimeTarget] = useState(null); // Timer absolut dunia nyata
-  const sessionToken = useRef(Math.random().toString(36).substring(2)); // Token unik tab
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [appModal, setAppModal] = useState({ show: false, type: '', message: '', title: '' });
+  const [isSyncing, setIsSyncing] = useState(true);
 
+  // ==============================================================
+  // 🛡️ SISTEM RECOVERY SESI & KEAMANAN (ANTI-REFRESH / ANTI-CLOSE)
+  // ==============================================================
+  
+  const [answers, setAnswers] = useState(() => {
+    try {
+      const savedAnswers = localStorage.getItem('se2026_answers_' + user.email);
+      return savedAnswers ? JSON.parse(savedAnswers) : {};
+    } catch(e) { return {}; }
+  });
+
+  const [warnings, setWarnings] = useState(() => {
+    return Number(localStorage.getItem('se2026_warn_' + user.email)) || 0;
+  });
+
+  // MEMORI PENYIMPAN WAKTU MULAI ASLI (AGAR TIDAK KESET SAAT RELOGIN)
+  const [actualStartTime, setActualStartTime] = useState(() => {
+    return localStorage.getItem('se2026_starttime_' + user.email) || initialStartTime;
+  });
+
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(jadwalServer.durasi * 60); 
+  const [endTimeTarget, setEndTimeTarget] = useState(null); 
+  
+  const sessionToken = useRef(Math.random().toString(36).substring(2)); 
   const submitRef = useRef(null);
   const isSubmitting = useRef(false);
 
-  // 1. Mencegah Back Button
+  // 1. Auto-Save Jawaban & Pelanggaran ke Browser
   useEffect(() => {
-    window.history.pushState(null, null, window.location.href);
-    const handlePopState = () => { window.history.pushState(null, null, window.location.href); };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+    if (user.email && view === 'quiz') {
+      localStorage.setItem('se2026_answers_' + user.email, JSON.stringify(answers));
+      localStorage.setItem('se2026_warn_' + user.email, warnings.toString());
+    }
+  }, [answers, warnings, user.email, view]);
 
-  // 2. Mencegah Refresh / Keluar Halaman Tanpa Sengaja
+  // 2. Kunci Tombol Back Browser Kuat-Kuat
+  useEffect(() => {
+    if (view === 'quiz') {
+      window.history.pushState(null, '', window.location.href);
+      const handlePopState = () => {
+        window.history.pushState(null, '', window.location.href);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [view]);
+
+  // 3. Mencegah reload halaman secara tidak sengaja
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (view === 'quiz' && !isSubmitting.current) {
         e.preventDefault();
-        e.returnValue = 'Data ujian Anda akan hilang. Lanjutkan?';
+        e.returnValue = 'Yakin ingin memuat ulang?';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [view]);
 
-  // 3. Efek Loading Logo
+  // 4. VERIFIKASI SESI SERVER-SIDE & KUNCI WAKTU MULAI ASLI
+  useEffect(() => {
+    if (view !== 'instructions') return;
+    let isMounted = true;
+    
+    const syncServerSession = async () => {
+        try {
+            const res = await fetch(`${GOOGLE_SCRIPT_WEB_APP_URL}?action=init&cb=${new Date().getTime()}`);
+            const data = await res.json();
+            
+            if (!isMounted) return;
+            
+            if (data.status === "success" && data.sesi_aktif) {
+                const sesiSaya = data.sesi_aktif.find(s => String(s.email).toLowerCase() === String(user.email).toLowerCase());
+                
+                if (sesiSaya && sesiSaya.waktu_mulai) {
+                    
+                    // KUNCI WAKTU MULAI DARI SERVER!
+                    setActualStartTime(sesiSaya.waktu_mulai);
+                    localStorage.setItem('se2026_starttime_' + user.email, sesiSaya.waktu_mulai);
+
+                    const parts = sesiSaya.waktu_mulai.replace(',', '').trim().split(' ');
+                    const dateParts = parts[0].split(/[\/-]/);
+                    const timeParts = (parts[1] || "00:00:00").split(/[.:]/);
+                    
+                    let year = dateParts[2];
+                    let month = dateParts[1];
+                    let day = dateParts[0];
+                    if (dateParts[0] && dateParts[0].length === 4) { 
+                        year = dateParts[0];
+                        day = dateParts[2];
+                    }
+                    
+                    const startMs = new Date(year, month - 1, day, timeParts[0] || 0, timeParts[1] || 0, timeParts[2] || 0).getTime();
+                    
+                    if (startMs > 0 && !isNaN(startMs)) {
+                        const target = startMs + (jadwalServer.durasi * 60 * 1000);
+                        setEndTimeTarget(target);
+                        localStorage.setItem('se2026_endtime_' + user.email, target.toString());
+                        setView('quiz'); 
+                        setIsSyncing(false);
+                        return; 
+                    }
+                }
+            }
+        } catch(e) {}
+        
+        // Fallback jika tidak ada sesi server (atau koneksi buruk)
+        if (isMounted) {
+            const savedEndTime = localStorage.getItem('se2026_endtime_' + user.email);
+            if (savedEndTime) {
+                setEndTimeTarget(Number(savedEndTime));
+                setView('quiz');
+            }
+            setIsSyncing(false);
+        }
+    };
+    
+    syncServerSession();
+    return () => { isMounted = false; };
+  }, [user.email, jadwalServer.durasi, view]);
+
   useEffect(() => {
     let logoTimer;
     if (view === 'saving') {
@@ -65,7 +158,7 @@ export default function QuizArea() {
     return () => clearInterval(logoTimer);
   }, [view]);
 
-  // 4. Deteksi Pelanggaran, Notifikasi & Layar Penuh
+  // 5. Deteksi Pelanggaran Keamanan Anti-Curang
   useEffect(() => {
     if (view === 'quiz') {
       const handleContextMenu = (e) => { e.preventDefault(); };
@@ -77,24 +170,18 @@ export default function QuizArea() {
         }
       };
 
-      const triggerCheatWarning = (msg) => {
+      const triggerCheatWarning = () => {
         setWarnings(prev => {
-          const newWarnings = prev + 1;
-          if (newWarnings >= 10) { 
-             if (!isSubmitting.current && submitRef.current) {
-               // SUBMIT OTOMATIS SAAT PELANGGARAN MAKSIMAL
-               alert("Batas pelanggaran sistem (10x) telah tercapai. Jawaban Anda disubmit secara otomatis!");
-               submitRef.current(); 
-             }
-          } else { 
-            setShowWarningModal(true); 
+          const next = prev + 1;
+          if (next < 10) {
+            setShowWarningModal(true);
           }
-          return newWarnings;
+          return next;
         });
       };
 
-      const handleFullscreenChange = () => { if (!document.fullscreenElement) triggerCheatWarning("Keluar dari Layar Penuh!"); };
-      const handleWindowBlur = () => { triggerCheatWarning("Membuka aplikasi lain / Notifikasi masuk!"); };
+      const handleFullscreenChange = () => { if (!document.fullscreenElement) triggerCheatWarning(); };
+      const handleWindowBlur = () => { triggerCheatWarning(); };
 
       document.addEventListener('contextmenu', handleContextMenu);
       document.addEventListener('copy', handleCopy);
@@ -112,14 +199,24 @@ export default function QuizArea() {
     }
   }, [view]);
 
-  // 5. Pencegah Login di 2 Tab Berbeda (Dalam Browser Sama)
+  // 6. Submit Otomatis Jika Pelanggaran >= 10
+  useEffect(() => {
+    if (view === 'quiz' && warnings >= 10) {
+      if (!isSubmitting.current && submitRef.current) {
+        alert("Batas pelanggaran sistem (10x) telah tercapai. Jawaban Anda disimpan dan dikirim otomatis!");
+        submitRef.current();
+      }
+    }
+  }, [warnings, view]);
+
+  // 7. Anti Multi-Tab / Multi-Device
   useEffect(() => {
     if (view === 'quiz') {
       localStorage.setItem('active_se2026_quiz_' + user.email, sessionToken.current);
       const handleStorageChange = (e) => {
         if (e.key === 'active_se2026_quiz_' + user.email && e.newValue !== sessionToken.current) {
           if (!isSubmitting.current && submitRef.current) {
-            alert("Aktivitas mencurigakan! Anda terdeteksi membuka ujian di tab/perangkat lain. Sesi ini otomatis dihentikan.");
+            alert("Aktivitas terdeteksi di perangkat/tab lain! Sesi ujian di layar ini otomatis dihentikan.");
             submitRef.current();
           }
         }
@@ -129,7 +226,7 @@ export default function QuizArea() {
     }
   }, [view, user.email]);
 
-  // 6. Absolute Timer (Kebal terhadap layar mati/minimize)
+  // 8. Sinkronisasi Timer Waktu Nyata Absolut (Kebal Refresh)
   useEffect(() => {
     if (view !== 'quiz' || !endTimeTarget) return;
     
@@ -140,9 +237,8 @@ export default function QuizArea() {
       if (remainingSec <= 0) {
         setTimeLeft(0);
         clearInterval(timerId);
-        // SUBMIT OTOMATIS SAAT WAKTU HABIS
         if (!isSubmitting.current && submitRef.current) {
-           alert("Waktu ujian telah habis! Jawaban Anda sedang dikirim ke server.");
+           alert("Waktu pengerjaan telah habis! Sistem langsung mengirim jawaban Anda ke server.");
            submitRef.current();
         }
       } else {
@@ -153,20 +249,27 @@ export default function QuizArea() {
     return () => clearInterval(timerId);
   }, [view, endTimeTarget]);
 
+  // ==============================================================
+  // FUNGSI PENGIRIMAN DATA (SUBMIT)
+  // ==============================================================
   const handleSubmit = useCallback(async () => {
     if (isSubmitting.current) return; 
     isSubmitting.current = true;
 
     setView('saving');
-    // Hapus sesi lokal agar tidak mengganggu ujian berikutnya
+    
+    // Bersihkan semua jejak recovery browser
     localStorage.removeItem('active_se2026_quiz_' + user.email);
+    localStorage.removeItem('se2026_endtime_' + user.email);
+    localStorage.removeItem('se2026_answers_' + user.email);
+    localStorage.removeItem('se2026_warn_' + user.email);
+    localStorage.removeItem('se2026_starttime_' + user.email);
 
     let correct = 0;
     const detailJawaban = [];
     
     (quizData || []).forEach(q => {
       if (!q) return; 
-      
       const userAnswer = answers[q?.id] || ""; 
       const isCorrect = userAnswer === q?.answer ? 1 : 0;
       if (isCorrect) correct++;
@@ -180,30 +283,51 @@ export default function QuizArea() {
     try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
 
     const payload = {
-      action: "save_all", waktu_mulai: startTime, waktu_selesai: endTime,
-      akun: user.email, nama: user.namaLengkap, skor: finalScore, percobaan: attemptCount, keterangan: finalScore >= 70 ? 'LULUS' : 'TIDAK LULUS', detail: detailJawaban
+      action: "save_all", 
+      waktu_mulai: actualStartTime, // DIKIRIM MENGGUNAKAN WAKTU ASLI!
+      waktu_selesai: endTime,
+      akun: user.email, 
+      nama: user.namaLengkap, 
+      skor: finalScore, 
+      percobaan: attemptCount, 
+      keterangan: finalScore >= 70 ? 'LULUS' : 'TIDAK LULUS', 
+      detail: detailJawaban
     };
 
     try { fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) }); } catch (e) {}
     setTimeout(() => setView('result'), 2000);
-  }, [answers, quizData, startTime, user.email, user.namaLengkap, attemptCount]);
+  }, [answers, quizData, actualStartTime, user.email, user.namaLengkap, attemptCount]);
 
   useEffect(() => { submitRef.current = handleSubmit; }, [handleSubmit]);
 
+  // ==============================================================
+  // KONTROL ALUR
+  // ==============================================================
   if (!location.state || !location.state.user) {
     return <Navigate to="/" replace />;
   }
 
   const startQuiz = () => {
     try { const elem = document.documentElement; if (elem.requestFullscreen) { elem.requestFullscreen(); } } catch (e) {}
-    try { fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "mulai_sesi", email: user.email, waktu_mulai: getLocalTime() }) }); } catch(e){}
     
-    // MULAI MENGHITUNG WAKTU REAL-TIME DUNIA NYATA
-    setEndTimeTarget(Date.now() + (jadwalServer.durasi * 60 * 1000));
+    // Set Waktu Mulai Asli & Simpan ke Memory dan Server
+    const realStartTime = getLocalTime();
+    setActualStartTime(realStartTime);
+    localStorage.setItem('se2026_starttime_' + user.email, realStartTime);
+
+    try { fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "mulai_sesi", email: user.email, waktu_mulai: realStartTime }) }); } catch(e){}
+    
+    let target = Date.now() + (jadwalServer.durasi * 60 * 1000);
+    localStorage.setItem('se2026_endtime_' + user.email, target.toString());
+    
+    setEndTimeTarget(target);
     setView('quiz');
   };
 
-  const handleKeluar = () => { navigate('/', { replace: true }); };
+  const handleKeluar = () => { 
+    window.history.replaceState(null, null, '/');
+    navigate('/', { replace: true, state: null }); 
+  };
 
   // ==========================================
   // RENDER VIEWS
@@ -216,13 +340,13 @@ export default function QuizArea() {
             <button onClick={handleKeluar} className="absolute right-3 top-4 sm:right-5 sm:top-5 p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors rounded-xl flex items-center gap-1 sm:gap-2 text-[9px] sm:text-[10px] font-black uppercase tracking-widest border border-slate-200"><LogOut size={12} /> Keluar</button>
             <BookOpen className="w-8 h-8 sm:w-10 sm:h-10 text-orange-500 mx-auto mb-2 sm:mb-3" />
             <h1 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight uppercase">Instruksi Pengerjaan</h1>
-            <p className="text-slate-500 mt-1 sm:mt-2 text-[10px] sm:text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Uji Kompetensi Calon Mitra Tambahan 2026,<br/><span className="font-black text-orange-600 text-[11px] sm:text-sm">{user.namaLengkap || user.email}</span></p>
+            <p className="text-slate-500 mt-2 text-xs font-medium leading-relaxed max-w-md mx-auto">Selamat datang di Uji Kompetensi Calon Mitra Tambahan 2026,<br/><span className="font-black text-orange-600 text-sm">{user.namaLengkap || user.email}</span></p>
           </div>
           <div className="p-4 sm:p-6 space-y-3 sm:space-y-4 flex flex-col">
              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-2 sm:gap-3 shadow-lg shadow-orange-200">
                    <Clock className="w-6 h-6 sm:w-8 sm:h-8 opacity-80" />
-                   <div><p className="text-[8px] sm:text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Durasi</p><p className="text-base sm:text-xl font-black leading-none">{jadwalServer.durasi} Mnt</p></div>
+                   <div><p className="text-[8px] sm:text-[9px] uppercase font-black opacity-80 tracking-widest leading-none mb-1">Durasi</p><p className="text-base sm:text-xl font-black leading-none">{jadwalServer.durasi} Menit</p></div>
                 </div>
                 <div className="bg-gradient-to-br from-[#facc15] to-[#eab308] text-slate-900 p-3 sm:p-4 rounded-[16px] sm:rounded-[20px] flex items-center gap-2 sm:gap-3 shadow-lg shadow-yellow-200">
                    <Database className="w-6 h-6 sm:w-8 sm:h-8 opacity-80" />
@@ -237,7 +361,13 @@ export default function QuizArea() {
              </div>
           </div>
           <div className="p-4 sm:p-6 pt-0">
-            <button onClick={startQuiz} className="w-full bg-[#1A1A1B] font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl shadow-xl active:scale-95 text-white flex justify-center items-center gap-2 uppercase tracking-widest text-[10px] sm:text-xs transition-all">SAYA MENGERTI, MULAI UJIAN <ArrowRight size={14}/></button>
+            {isSyncing ? (
+               <div className="w-full bg-slate-100 text-slate-500 font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl flex justify-center items-center gap-2 uppercase tracking-widest text-[10px] sm:text-xs border border-slate-200">
+                   <Loader2 size={14} className="animate-spin text-orange-500"/> Memverifikasi Sesi...
+               </div>
+            ) : (
+               <button onClick={startQuiz} className="w-full bg-[#1A1A1B] font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl shadow-xl active:scale-95 text-white flex justify-center items-center gap-2 uppercase tracking-widest text-[10px] sm:text-xs transition-all">SAYA MENGERTI, MULAI UJIAN <ArrowRight size={14}/></button>
+            )}
           </div>
         </div>
       </div>
@@ -283,18 +413,18 @@ export default function QuizArea() {
             <div className="bg-white rounded-[24px] max-w-sm w-full p-6 sm:p-8 text-center animate-scale-in shadow-2xl">
               <ShieldAlert className="w-12 h-12 sm:w-16 sm:h-16 text-orange-500 mx-auto mb-4 sm:mb-5" />
               <h3 className="font-black text-lg sm:text-xl mb-2 sm:mb-3 text-[#1A1A1B] uppercase tracking-tight">Gangguan Terdeteksi</h3>
-              <p className="text-slate-600 mb-5 sm:mb-6 text-xs sm:text-sm font-bold leading-relaxed">Sistem mendeteksi Anda keluar dari halaman/notifikasi. Pelanggaran ke-{warnings}/10.</p>
+              <p className="text-slate-600 mb-5 sm:mb-6 text-xs sm:text-sm font-bold leading-relaxed">Sistem mendeteksi Anda keluar dari halaman atau menerima notifikasi/panggilan. Pelanggaran ke-{warnings}/10.</p>
               <button onClick={() => setShowWarningModal(false)} className="w-full bg-[#1A1A1B] text-white font-black py-3 sm:py-4 rounded-xl hover:bg-black uppercase tracking-widest text-[10px] sm:text-xs transition-colors">Lanjutkan Ujian</button>
             </div>
           </div>
         )}
 
         <header className="bg-white/90 backdrop-blur-md px-3 sm:px-6 h-[60px] sm:h-[70px] flex items-center justify-between z-40 shrink-0 border-b border-slate-200 shadow-sm">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <img src={LOGO_BPS} className="w-7 h-7 sm:w-9 sm:h-9 object-contain drop-shadow-sm" alt="Logo" />
-            <div className="font-black text-[10px] sm:text-sm tracking-tight text-slate-800 uppercase hidden xs:block line-clamp-1 max-w-[120px] sm:max-w-none">Uji Kompetensi 2026</div>
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 mr-2">
+            <img src={LOGO_BPS} className="w-7 h-7 sm:w-9 sm:h-9 object-contain drop-shadow-sm shrink-0" alt="Logo" />
+            <div className="font-black text-[9px] sm:text-sm tracking-tight text-slate-800 uppercase leading-tight">Uji Kompetensi Calon Mitra Tambahan 2026</div>
           </div>
-          <div className="flex gap-2 sm:gap-3 items-center">
+          <div className="flex gap-2 sm:gap-3 items-center shrink-0">
              <div className="hidden md:flex items-center gap-2 bg-slate-50 border border-slate-100 px-4 py-2 rounded-full shadow-sm">
                 <User className="w-4 h-4 text-orange-500" />
                 <span className="text-xs font-black uppercase tracking-wider text-slate-700 truncate max-w-[150px]">{user.namaLengkap || user.email}</span>

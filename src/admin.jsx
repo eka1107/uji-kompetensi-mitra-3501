@@ -25,7 +25,7 @@ const ProgressBar = ({ percent, color = "bg-[#1A1A1B]" }) => (
   </div>
 );
 
-// --- KOMPONEN BAR CHART KECAMATAN (HIDUP & INTERAKTIF) ---
+// --- KOMPONEN BAR CHART KECAMATAN ---
 const KecamatanProgressChart = ({ data }) => {
   const { kec, target, mengerjakan, lulus, pctMengerjakan, pctLulus } = data;
   return (
@@ -38,7 +38,6 @@ const KecamatanProgressChart = ({ data }) => {
       </div>
       
       <div className="space-y-4 pt-1">
-        {/* Progress Mengerjakan (HITAM) */}
         <div className="relative group/bar">
           <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
             <span>Mengerjakan</span>
@@ -51,10 +50,9 @@ const KecamatanProgressChart = ({ data }) => {
           </div>
         </div>
 
-        {/* Progress Lulus (KUNING) */}
         <div className="relative group/bar">
           <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
-            <span>Lulus PG</span>
+            <span>Lulus</span>
             <span className="text-yellow-600">{pctLulus}%</span>
           </div>
           <ProgressBar percent={pctLulus} color="bg-[#facc15]" />
@@ -146,15 +144,15 @@ export default function AdminDashboard() {
   const [jadwalForm, setJadwalForm] = useState({ mulai: '', selesai: '', durasi: 45 });
   const [newPeserta, setNewPeserta] = useState({ email: '', password: '', nama: '', desa: '', kecamatan: 'Pacitan' });
   
-  // --- STATE UI & FILTER ---
+  // --- STATE UI, FILTER & SORTING ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL'); 
   const [filterKecamatan, setFilterKecamatan] = useState('ALL');
   const [filterDesa, setFilterDesa] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15); 
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Universal Sorting State
 
-  // --- STATE DASHBOARD KHUSUS ---
   const [dashFilter, setDashFilter] = useState('');
   const [dashSort, setDashSort] = useState('nama_asc');
 
@@ -173,16 +171,61 @@ export default function AdminDashboard() {
     if (window.innerWidth >= 768) setIsSidebarOpen(true);
   }, [navigate]);
 
+  // Reset Sorting saat pindah Tab
+  useEffect(() => {
+    setSortConfig({ key: null, direction: 'asc' });
+    setCurrentPage(1);
+  }, [activeTab]);
+
   const fetchData = async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`${GOOGLE_SCRIPT_WEB_APP_URL}?action=init&cb=${new Date().getTime()}`);
       const data = await res.json();
       if (data.status === "success") {
-        setAdminData(data.nilai || []);
+        
+        // FILTER ANTI DUPLIKAT HASIL UJIAN
+        const rawNilai = data.nilai || [];
+        const uniqueNilai = rawNilai.filter((v, i, a) => 
+          a.findIndex(t => String(t.akun).toLowerCase() === String(v.akun).toLowerCase()) === i
+        );
+        setAdminData(uniqueNilai);
+        
         setDaftarPeserta(data.akun || []);
         setQuizData(data.soal || []);
-        setActiveSessions(data.sesi_aktif || []);
+        
+        // --- 🚀 FITUR BARU: AUTO-RESET SESI > 24 JAM ---
+        const rawSesi = data.sesi_aktif || [];
+        const uniqueSesi = rawSesi.filter((v, i, a) => a.findIndex(t => (t.email === v.email)) === i);
+        
+        const validSesi = [];
+        const now = Date.now();
+        
+        uniqueSesi.forEach(s => {
+          let startMs = 0;
+          try {
+            const parts = s.waktu_mulai.replace(',', '').trim().split(' ');
+            const dateParts = parts[0].split(/[\/-]/);
+            const timeParts = (parts[1] || "00:00:00").split(/[.:]/);
+            let year = dateParts[2]; let month = dateParts[1]; let day = dateParts[0];
+            if (dateParts[0] && dateParts[0].length === 4) { year = dateParts[0]; day = dateParts[2]; }
+            startMs = new Date(year, month - 1, day, timeParts[0] || 0, timeParts[1] || 0, timeParts[2] || 0).getTime();
+          } catch(e) {}
+          
+          // Jika sesi lebih tua dari 24 Jam (86.400.000 ms)
+          if (startMs > 0 && (now - startMs) > 86400000) {
+            // Hapus otomatis di Background ke Server
+            fetch(GOOGLE_SCRIPT_WEB_APP_URL, { 
+              method: 'POST', mode: 'no-cors', 
+              body: JSON.stringify({ action: "delete_sesi", email: s.email }) 
+            });
+          } else {
+            validSesi.push(s); // Masukkan ke tampilan jika masih baru
+          }
+        });
+        
+        setActiveSessions(validSesi);
+        
         setDetailAnswers(data.detail_jawaban || []);
         setDaftarPetugas(data.petugas || []);
         setSoalWawancara(data.soal_wawancara || []);
@@ -215,10 +258,9 @@ export default function AdminDashboard() {
 
   const getPesertaInfo = (email) => daftarPeserta.find(p => String(p.email).toLowerCase() === String(email).toLowerCase()) || { nama: '-', desa: '-', kecamatan: '-' };
   const getJumlahBenar = (skor) => Math.round((skor / 100) * (quizData.length || 100));
-
   const uniqueDesaList = [...new Set(daftarPeserta.map(p => p.desa).filter(Boolean))].sort();
 
-  // --- LOGIKA PROGRESS KECAMATAN (HIDUP / REAL DATA) ---
+  // --- LOGIKA PROGRESS KECAMATAN ---
   let kecamatanStats = KECAMATAN_LIST.map(kec => {
     const pesertaKec = daftarPeserta.filter(p => (p.kecamatan || '').toUpperCase() === kec.toUpperCase());
     const target = pesertaKec.length; 
@@ -234,10 +276,7 @@ export default function AdminDashboard() {
     return { kec, target, mengerjakan, lulus, pctMengerjakan, pctLulus };
   });
 
-  if (dashFilter) {
-    kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
-  }
-
+  if (dashFilter) kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
   kecamatanStats.sort((a, b) => {
     if (dashSort === 'nama_asc') return a.kec.localeCompare(b.kec);
     if (dashSort === 'nama_desc') return b.kec.localeCompare(a.kec);
@@ -248,47 +287,109 @@ export default function AdminDashboard() {
     return 0;
   });
 
-  // --- FILTERING & PAGINATION CALCULATIONS ---
+  // --- 🚀 FITUR BARU: LOGIKA SORTING TABEL UNIVERSAL ---
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+    setSortConfig({ key, direction });
+  };
+
+  const SortIcon = ({ columnKey }) => {
+    if (sortConfig.key !== columnKey) return <span className="opacity-30 inline-block ml-1">↕</span>;
+    return <span className="inline-block ml-1 text-[#facc15] drop-shadow-sm font-black">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+  };
+
+  const handleSort = (dataArray) => {
+    if (!sortConfig.key) return dataArray;
+    return [...dataArray].sort((a, b) => {
+      let valA = a[sortConfig.key] || "";
+      let valB = b[sortConfig.key] || "";
+      
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+      
+      if (!isNaN(valA) && !isNaN(valB) && valA !== '' && valB !== '') {
+         valA = Number(valA); valB = Number(valB);
+      }
+
+      if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // --- FILTERING, SORTING & PAGINATION CALCULATIONS ---
+  
+  // 1. Peserta
   const filteredPeserta = daftarPeserta.filter(p => `${p.nama} ${p.email} ${p.desa} ${p.kecamatan || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
-  const currentPeserta = filteredPeserta.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesPeserta = Math.ceil(filteredPeserta.length / itemsPerPage);
+  const sortedPeserta = handleSort(filteredPeserta);
+  const currentPeserta = sortedPeserta.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesPeserta = Math.ceil(sortedPeserta.length / itemsPerPage);
 
-  const currentPetugas = daftarPetugas.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesPetugas = Math.ceil(daftarPetugas.length / itemsPerPage);
+  // 2. Petugas
+  const sortedPetugas = handleSort(daftarPetugas);
+  const currentPetugas = sortedPetugas.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesPetugas = Math.ceil(sortedPetugas.length / itemsPerPage);
 
-  const filteredHasil = adminData.filter(item => {
+  // 3. Hasil Ujian (Map Data Terlebih Dahulu Agar Bisa Disorting Berdasarkan Nama/Desa dll)
+  const mappedHasil = adminData.map(item => {
     const p = getPesertaInfo(item.akun);
-    const s = `${item.akun} ${p.nama} ${p.desa} ${p.kecamatan || ''}`.toLowerCase();
+    return {
+      ...item,
+      nama: p.nama,
+      kecamatan: p.kecamatan || '-',
+      desa: p.desa || '-',
+      durasi: hitungDurasi(item.waktu_mulai, item.waktu_selesai),
+      benar: getJumlahBenar(item.skor)
+    };
+  });
+  const filteredHasil = mappedHasil.filter(item => {
+    const s = `${item.akun} ${item.nama} ${item.desa} ${item.kecamatan}`.toLowerCase();
     const matchSearch = s.includes(searchTerm.toLowerCase());
     const matchStatus = filterStatus === 'ALL' || item.keterangan === filterStatus;
-    const matchKecamatan = filterKecamatan === 'ALL' || (p.kecamatan && p.kecamatan.toUpperCase() === filterKecamatan.toUpperCase());
-    const matchDesa = filterDesa === 'ALL' || (p.desa && p.desa.toUpperCase() === filterDesa.toUpperCase());
+    const matchKecamatan = filterKecamatan === 'ALL' || (item.kecamatan.toUpperCase() === filterKecamatan.toUpperCase());
+    const matchDesa = filterDesa === 'ALL' || (item.desa.toUpperCase() === filterDesa.toUpperCase());
     return matchSearch && matchStatus && matchKecamatan && matchDesa;
   });
-  const currentDataHasil = filteredHasil.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesHasil = Math.ceil(filteredHasil.length / itemsPerPage);
+  const sortedHasil = handleSort(filteredHasil);
+  const currentDataHasil = sortedHasil.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesHasil = Math.ceil(sortedHasil.length / itemsPerPage);
 
+  // 4. Hasil Wawancara
   const filteredHasilWawancara = hasilWawancara.filter(item => {
     const s = `${item.nama_peserta} ${item.nama_petugas} ${item.keterangan}`.toLowerCase();
     return s.includes(searchTerm.toLowerCase());
   });
-  const currentHasilWawancara = filteredHasilWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesWawancara = Math.ceil(filteredHasilWawancara.length / itemsPerPage);
+  const sortedWawancara = handleSort(filteredHasilWawancara);
+  const currentHasilWawancara = sortedWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesWawancara = Math.ceil(sortedWawancara.length / itemsPerPage);
 
-  const currentSesi = activeSessions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesSesi = Math.ceil(activeSessions.length / itemsPerPage);
+  // 5. Sesi Aktif
+  const sortedSesi = handleSort(activeSessions);
+  const currentSesi = sortedSesi.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesSesi = Math.ceil(sortedSesi.length / itemsPerPage);
 
-  const currentRemedial = daftarRemedial.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesRemedial = Math.ceil(daftarRemedial.length / itemsPerPage);
+  // 6. Remedial
+  const sortedRemedial = handleSort(daftarRemedial);
+  const currentRemedial = sortedRemedial.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesRemedial = Math.ceil(sortedRemedial.length / itemsPerPage);
+
+  // 7. Soal PG & Wawancara
+  const sortedSoal = handleSort(quizData);
+  const currentSoal = sortedSoal.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesSoal = Math.ceil(sortedSoal.length / itemsPerPage);
+
+  const sortedSoalWawancara = handleSort(soalWawancara);
+  const currentSoalWawancara = sortedSoalWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesSoalWawancara = Math.ceil(sortedSoalWawancara.length / itemsPerPage);
+
 
   // --- LOGIKA EXPORT ---
   const exportHasilToCSV = () => {
     const headers = ["No", "Selesai", "Nama", "Email", "Kecamatan", "Desa", "Benar", "Skor", "Durasi", "Status"];
     let csv = headers.join(",") + "\n";
-    filteredHasil.forEach((r, i) => {
-      const p = getPesertaInfo(r.akun);
-      const dur = hitungDurasi(r.waktu_mulai, r.waktu_selesai);
-      csv += `${i+1},"${r.waktu_selesai}","${p.nama}","${r.akun}","${p.kecamatan || '-'}","${p.desa}",${getJumlahBenar(r.skor)},${r.skor},"${dur}","${r.keterangan}"\n`;
+    sortedHasil.forEach((r, i) => {
+      csv += `${i+1},"${r.waktu_selesai}","${r.nama}","${r.akun}","${r.kecamatan}","${r.desa}",${r.benar},${r.skor},"${r.durasi}","${r.keterangan}"\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
@@ -333,18 +434,17 @@ export default function AdminDashboard() {
             <tbody>
     `;
     
-    filteredHasil.forEach((r, i) => {
-       const p = getPesertaInfo(r.akun);
+    sortedHasil.forEach((r, i) => {
        html += `
          <tr>
            <td class="text-center">${i+1}</td>
            <td>${r.waktu_selesai}</td>
-           <td><strong>${p.nama}</strong></td>
+           <td><strong>${r.nama}</strong></td>
            <td>${r.akun}</td>
-           <td>${p.kecamatan || '-'}</td>
-           <td>${p.desa}</td>
-           <td class="text-center">${hitungDurasi(r.waktu_mulai, r.waktu_selesai)}</td>
-           <td class="text-center">${getJumlahBenar(r.skor)}</td>
+           <td>${r.kecamatan}</td>
+           <td>${r.desa}</td>
+           <td class="text-center">${r.durasi}</td>
+           <td class="text-center">${r.benar}</td>
            <td class="text-center"><strong>${r.skor}</strong></td>
            <td>${r.keterangan}</td>
          </tr>
@@ -424,6 +524,19 @@ export default function AdminDashboard() {
     });
   };
 
+  // --- LOGIKA RESET SESI NYANTOL ---
+  const requestResetSesi = (email) => {
+    showConfirm('Reset Sesi Peserta', `Hapus sesi aktif untuk ${email}? Tindakan ini akan mengizinkan peserta login kembali untuk ujian ulang.`, () => {
+      setActiveSessions(prev => prev.filter(s => s.email !== email));
+      fetch(GOOGLE_SCRIPT_WEB_APP_URL, { 
+        method: 'POST', 
+        mode: 'no-cors', 
+        body: JSON.stringify({ action: "delete_sesi", email: email }) 
+      });
+      showAlert('Berhasil', 'Sesi peserta berhasil direset secara permanen.');
+    });
+  };
+
   const downloadTemplateCSV = () => {
     const csvContent = "data:text/csv;charset=utf-8,email,password,nama,kecamatan,desa\nmitra1@bps.go.id,sandi123,Budi Santoso,Pacitan,Ploso\nmitra2@bps.go.id,sandi456,Siti Aminah,Pacitan,Arjowinangun";
     const link = document.createElement("a");
@@ -487,7 +600,7 @@ export default function AdminDashboard() {
     });
   };
 
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterKecamatan, filterDesa, activeTab]);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterKecamatan, filterDesa]);
 
   if (isLoading) {
     return (
@@ -625,7 +738,6 @@ export default function AdminDashboard() {
       {/* --- HEADER --- */}
       <header className="bg-white border-b border-slate-200 px-4 md:px-6 h-[70px] flex items-center justify-between shrink-0 z-50">
         <div className="flex items-center gap-4">
-          {/* Tombol Hamburger Desain Lama */}
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-600">
             <Menu size={24}/>
           </button>
@@ -640,7 +752,7 @@ export default function AdminDashboard() {
         
         <div className="flex gap-2 items-center">
           <button onClick={fetchData} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs font-black transition-colors shadow-sm">
-            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Segarkan</span>
+            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest"></span>
           </button>
           <button onClick={handleLogout} className="flex items-center gap-2 bg-[#1A1A1B] text-white hover:text-[#facc15] px-4 py-2.5 rounded-xl text-xs font-black transition-colors shadow-md hover:shadow-lg">
             <LogOut className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Keluar</span>
@@ -721,20 +833,17 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* SATU BARCHART TERPADU UNTUK 12 KECAMATAN */}
                 <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 p-6 md:p-8">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Terpadu Kecamatan</h3>
+                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Tiap Kecamatan</h3>
                       <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Kabupaten Pacitan</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      {/* Filter Search */}
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
                         <input type="text" placeholder="Cari kecamatan..." value={dashFilter} onChange={e => setDashFilter(e.target.value)} className="w-full sm:w-40 pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/>
                       </div>
-                      {/* Filter Sort */}
                       <select value={dashSort} onChange={e => setDashSort(e.target.value)} className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 outline-none focus:border-black cursor-pointer text-slate-600">
                          <option value="nama_asc">Nama (A-Z)</option>
                          <option value="nama_desc">Nama (Z-A)</option>
@@ -743,7 +852,6 @@ export default function AdminDashboard() {
                          <option value="lulus_desc">Lulus Tertinggi</option>
                          <option value="lulus_asc">Lulus Terendah</option>
                       </select>
-                      {/* Legend */}
                       <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
                         <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#1A1A1B]"></div> Mengerjakan</span>
                         <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#facc15]"></div> Lulus</span>
@@ -815,10 +923,10 @@ export default function AdminDashboard() {
                        <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b-2 border-slate-800 sticky top-0 z-10">
                          <tr>
                            <th className="px-6 py-4 w-12 text-center">No</th>
-                           <th className="px-6 py-4">Peserta</th>
-                           <th className="px-6 py-4">Kecamatan</th>
-                           <th className="px-6 py-4">Desa</th>
-                           <th className="px-6 py-4">Kata Sandi</th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama')}>Peserta <SortIcon columnKey="nama"/></th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('kecamatan')}>Kecamatan <SortIcon columnKey="kecamatan"/></th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('desa')}>Desa <SortIcon columnKey="desa"/></th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('password')}>Kata Sandi <SortIcon columnKey="password"/></th>
                            <th className="px-6 py-4 text-right">Opsi</th>
                          </tr>
                        </thead>
@@ -866,26 +974,21 @@ export default function AdminDashboard() {
                      <button type="submit" className="bg-[#1A1A1B] hover:bg-black text-[#facc15] font-black py-3.5 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95"><UserPlus size={16}/> Daftarkan</button>
                    </form>
                 </div>
-                <div className="flex items-center gap-3">
-                  <h3 className="font-black text-slate-800 text-base uppercase tracking-tight">Database Petugas ({daftarPetugas.length})</h3>
-                  
-                  {/* TOMBOL MENUJU PORTAL WAWANCARA */}
-                  <button onClick={() => window.open('/wawancara', '_blank')} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-all uppercase tracking-widest shadow-sm">
-                    Portal Wawancara <ChevronRight size={12}/>
-                  </button>
-                </div>
 
                 <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
                    <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
                       <h3 className="font-black text-slate-800 text-base uppercase tracking-tight">Database Petugas ({daftarPetugas.length})</h3>
+                      <button onClick={() => window.open('/wawancara', '_blank')} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-all uppercase tracking-widest shadow-sm">
+                        Portal Wawancara <ChevronRight size={12}/>
+                      </button>
                    </div>
                    <div className="overflow-x-auto custom-scrollbar">
                      <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
                        <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b-2 border-slate-800 sticky top-0 z-10">
                          <tr>
                            <th className="px-6 py-4 w-12 text-center">No</th>
-                           <th className="px-6 py-4">Nama Petugas</th>
-                           <th className="px-6 py-4">Email Akses</th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_petugas')}>Nama Petugas <SortIcon columnKey="nama_petugas"/></th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('email_petugas')}>Email Akses <SortIcon columnKey="email_petugas"/></th>
                            <th className="px-6 py-4 text-right">Opsi</th>
                          </tr>
                        </thead>
@@ -928,14 +1031,14 @@ export default function AdminDashboard() {
 
                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
                     <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lulus PG</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahLulus}</p></div>
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahLulus}</p></div>
                       <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><CheckCircle2 size={20}/></div>
                     </div>
                   </div>
 
                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
                     <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tidak Lulus PG</p><p className="text-3xl font-black text-[#1A1A1B]">{totalGagal}</p></div>
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tidak Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{totalGagal}</p></div>
                       <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><XCircle size={20}/></div>
                     </div>
                   </div>
@@ -943,11 +1046,10 @@ export default function AdminDashboard() {
 
                 <div className="bg-white rounded-[24px] overflow-hidden border border-slate-200 shadow-sm flex flex-col">
                   
-                  {/* BARIS FILTER KOMPLEKS */}
                   <div className="px-6 py-5 border-b border-slate-100 flex flex-col space-y-4 bg-white">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-3">
-                        <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekapitulasi Ujian PG</h3>
+                        <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekapitulasi Ujian</h3>
                         <span className="bg-[#facc15] text-[#1A1A1B] px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border border-yellow-400">PG: 70</span>
                       </div>
                       <div className="flex gap-2">
@@ -982,34 +1084,32 @@ export default function AdminDashboard() {
                       <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 sticky top-0 z-10 border-b-2 border-slate-800">
                         <tr>
                           <th className="px-6 py-4 w-10 text-center">No</th>
-                          <th className="px-6 py-4">Selesai</th>
-                          <th className="px-6 py-4">Identitas Peserta</th>
-                          <th className="px-6 py-4">Kecamatan</th>
-                          <th className="px-6 py-4">Desa</th>
-                          <th className="px-6 py-4 text-center">Durasi</th>
-                          <th className="px-6 py-4 text-center">B</th>
-                          <th className="px-6 py-4 text-center">Skor</th>
-                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('waktu_selesai')}>Selesai <SortIcon columnKey="waktu_selesai"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama')}>Peserta <SortIcon columnKey="nama"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('kecamatan')}>Kecamatan <SortIcon columnKey="kecamatan"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('desa')}>Desa <SortIcon columnKey="desa"/></th>
+                          <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('durasi')}>Durasi <SortIcon columnKey="durasi"/></th>
+                          <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('benar')}>B <SortIcon columnKey="benar"/></th>
+                          <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('skor')}>Skor <SortIcon columnKey="skor"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('keterangan')}>Status <SortIcon columnKey="keterangan"/></th>
                           <th className="px-6 py-4 text-right">Opsi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {currentDataHasil.map((row, idx) => {
-                          const pInfo = getPesertaInfo(row.akun);
                           const actualIdx = (currentPage - 1) * itemsPerPage + idx + 1;
-                          const durasi = hitungDurasi(row.waktu_mulai, row.waktu_selesai);
                           return (
                             <tr key={idx} className="hover:bg-slate-50 transition-colors group">
                               <td className="px-6 py-3 text-center font-bold text-slate-300 text-xs">{actualIdx}</td>
                               <td className="px-6 py-3 text-[11px] text-slate-500 font-mono">{row.waktu_selesai}</td>
                               <td className="px-6 py-3">
-                                <p className="font-bold text-[13px] text-slate-800 mb-0.5">{pInfo.nama}</p>
+                                <p className="font-bold text-[13px] text-slate-800 mb-0.5">{row.nama}</p>
                                 <p className="text-[10px] text-slate-400 font-mono">{row.akun}</p>
                               </td>
-                              <td className="px-6 py-3 text-xs font-semibold text-slate-600">{pInfo.kecamatan || '-'}</td>
-                              <td className="px-6 py-3 text-xs font-semibold text-slate-600">{pInfo.desa || '-'}</td>
-                              <td className="px-6 py-3 text-center"><span className="px-2.5 py-1 border border-slate-200 bg-white rounded-md text-[10px] font-mono text-slate-600">{durasi}</span></td>
-                              <td className="px-6 py-3 text-xs font-bold text-slate-600 text-center">{getJumlahBenar(row.skor)}</td>
+                              <td className="px-6 py-3 text-xs font-semibold text-slate-600">{row.kecamatan}</td>
+                              <td className="px-6 py-3 text-xs font-semibold text-slate-600">{row.desa}</td>
+                              <td className="px-6 py-3 text-center"><span className="px-2.5 py-1 border border-slate-200 bg-white rounded-md text-[10px] font-mono text-slate-600">{row.durasi}</span></td>
+                              <td className="px-6 py-3 text-xs font-bold text-slate-600 text-center">{row.benar}</td>
                               <td className="px-6 py-3 text-sm font-black text-center text-[#1A1A1B]">{row.skor}</td>
                               <td className="px-6 py-3">
                                 {row.keterangan === 'LULUS' ? (
@@ -1020,7 +1120,7 @@ export default function AdminDashboard() {
                               </td>
                               <td className="px-6 py-3 text-right">
                                  <div className="flex justify-end gap-1.5 opacity-50 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openDetailJawaban(row.akun, pInfo.nama, row.skor, row.keterangan)} className="p-2 text-slate-500 hover:text-black bg-white border border-slate-200 rounded-lg hover:border-black transition-colors" title="Lihat Detail"><FileText size={16}/></button>
+                                    <button onClick={() => openDetailJawaban(row.akun, row.nama, row.skor, row.keterangan)} className="p-2 text-slate-500 hover:text-black bg-white border border-slate-200 rounded-lg hover:border-black transition-colors" title="Lihat Detail"><FileText size={16}/></button>
                                     <button onClick={() => requestDeleteHasilFull(row.akun)} className="p-2 text-slate-500 hover:text-white bg-white border border-slate-200 rounded-lg hover:bg-red-500 hover:border-red-600 transition-colors" title="Hapus Data"><Trash2 size={16}/></button>
                                  </div>
                               </td>
@@ -1065,11 +1165,11 @@ export default function AdminDashboard() {
                       <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 sticky top-0 z-10 border-b-2 border-slate-800">
                         <tr>
                           <th className="px-6 py-4 w-10 text-center">No</th>
-                          <th className="px-6 py-4">Nama Peserta</th>
-                          <th className="px-6 py-4">Petugas</th>
-                          <th className="px-6 py-4 max-w-[200px]">Pertanyaan</th>
-                          <th className="px-6 py-4 max-w-[250px]">Jawaban</th>
-                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_peserta')}>Peserta <SortIcon columnKey="nama_peserta"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_petugas')}>Petugas <SortIcon columnKey="nama_petugas"/></th>
+                          <th className="px-6 py-4 max-w-[200px] cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('pertanyaan')}>Pertanyaan <SortIcon columnKey="pertanyaan"/></th>
+                          <th className="px-6 py-4 max-w-[250px] cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('jawaban')}>Jawaban <SortIcon columnKey="jawaban"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('keterangan')}>Status <SortIcon columnKey="keterangan"/></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -1102,15 +1202,17 @@ export default function AdminDashboard() {
             {/* TAB CONTENT: BANK SOAL PG */}
             {activeTab === 'soal' && (
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm flex flex-col h-[75vh] animate-fade-up">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
                   <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight flex items-center gap-2"><Database className="text-[#facc15]"/> Soal Ujian ({quizData.length})</h3>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/50">
-                  <div className="grid gap-4">
-                    {quizData.map((s, i) => (
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/50 flex flex-col">
+                  <div className="grid gap-4 flex-1 content-start">
+                    {currentSoal.map((s, i) => {
+                      const actualIdx = (currentPage - 1) * itemsPerPage + i + 1;
+                      return (
                       <div key={i} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-black transition-colors">
                          <div className="flex gap-4">
-                           <div className="mt-0.5 text-sm font-black text-slate-300 w-6 text-right shrink-0">{i+1}.</div>
+                           <div className="mt-0.5 text-sm font-black text-slate-300 w-6 text-right shrink-0">{actualIdx}.</div>
                            <div className="flex-1">
                              <p className="font-bold text-slate-800 text-sm mb-4 leading-relaxed">{s.soal}</p>
                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600 font-medium">
@@ -1127,34 +1229,44 @@ export default function AdminDashboard() {
                            </div>
                          </div>
                       </div>
-                    ))}
-                    {quizData.length === 0 && <p className="text-center py-20 text-slate-400 font-bold text-sm">Belum ada soal PG yang disinkronisasi.</p>}
+                      )
+                    })}
+                    {currentSoal.length === 0 && <p className="text-center py-20 text-slate-400 font-bold text-sm">Belum ada soal PG yang disinkronisasi.</p>}
                   </div>
                 </div>
+                {totalPagesSoal > 0 && (
+                   <PaginationFooter currentPage={currentPage} totalPages={totalPagesSoal} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
+                )}
               </div>
             )}
 
             {/* TAB CONTENT: SOAL WAWANCARA */}
             {activeTab === 'soal_wawancara' && (
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm flex flex-col h-[75vh] animate-fade-up">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
                   <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight flex items-center gap-2"><MessageCircle className="text-[#facc15]"/> Daftar Pertanyaan Wawancara ({soalWawancara.length})</h3>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/50">
-                  <div className="grid gap-4">
-                    {soalWawancara.map((s, i) => (
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/50 flex flex-col">
+                  <div className="grid gap-4 flex-1 content-start">
+                    {currentSoalWawancara.map((s, i) => {
+                      const actualIdx = (currentPage - 1) * itemsPerPage + i + 1;
+                      return (
                       <div key={i} className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-black transition-colors">
                          <div className="flex gap-4">
-                           <div className="mt-0.5 text-sm font-black text-slate-300 w-6 text-right shrink-0">{i+1}.</div>
+                           <div className="mt-0.5 text-sm font-black text-slate-300 w-6 text-right shrink-0">{actualIdx}.</div>
                            <div className="flex-1">
                              <p className="font-bold text-slate-800 text-sm leading-relaxed">{s.pertanyaan || s}</p>
                            </div>
                          </div>
                       </div>
-                    ))}
-                    {soalWawancara.length === 0 && <p className="text-center py-20 text-slate-400 font-bold text-sm">Belum ada soal wawancara yang disinkronisasi.</p>}
+                      )
+                    })}
+                    {currentSoalWawancara.length === 0 && <p className="text-center py-20 text-slate-400 font-bold text-sm">Belum ada soal wawancara yang disinkronisasi.</p>}
                   </div>
                 </div>
+                {totalPagesSoalWawancara > 0 && (
+                   <PaginationFooter currentPage={currentPage} totalPages={totalPagesSoalWawancara} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
+                )}
               </div>
             )}
 
@@ -1164,7 +1276,7 @@ export default function AdminDashboard() {
                 <div className="p-6 border-b border-slate-100 bg-white flex justify-between items-center">
                   <div>
                     <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight">Sesi Aktif Ujian</h3>
-                    <p className="text-[10px] text-slate-500 font-medium mt-1 tracking-wide">Pantau peserta yang sedang mengerjakan soal.</p>
+                    <p className="text-[10px] text-slate-500 font-medium mt-1 tracking-wide">Pantau peserta yang sedang mengerjakan soal. (Otomatis Reset &gt; 24 Jam)</p>
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
@@ -1174,7 +1286,13 @@ export default function AdminDashboard() {
                     <>
                     <table className="w-full text-left border-collapse min-w-max flex-1">
                        <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b-2 border-slate-800 sticky top-0">
-                         <tr><th className="px-6 py-4 w-12 text-center">No</th><th className="px-6 py-4">Akun Email</th><th className="px-6 py-4">Waktu Mulai</th><th className="px-6 py-4">Status</th></tr>
+                         <tr>
+                           <th className="px-6 py-4 w-12 text-center">No</th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('email')}>Akun Email <SortIcon columnKey="email"/></th>
+                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('waktu_mulai')}>Waktu Mulai <SortIcon columnKey="waktu_mulai"/></th>
+                           <th className="px-6 py-4">Status</th>
+                           <th className="px-6 py-4 text-right">Opsi</th>
+                         </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-100 h-full">
                          {currentSesi.map((s, i) => {
@@ -1188,6 +1306,11 @@ export default function AdminDashboard() {
                                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white border border-blue-200 text-[9px] font-black uppercase tracking-widest text-blue-600 animate-pulse shadow-sm">
                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div> Online
                                  </span>
+                               </td>
+                               <td className="px-6 py-3 text-right">
+                                 <button onClick={() => requestResetSesi(s.email)} className="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center justify-end gap-1.5 ml-auto transition-colors uppercase tracking-widest shadow-sm active:scale-95">
+                                   <XCircle size={12}/> Reset Sesi
+                                 </button>
                                </td>
                              </tr>
                            )
@@ -1207,13 +1330,18 @@ export default function AdminDashboard() {
             {activeTab === 'remedial' && (
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm flex flex-col h-[75vh] animate-fade-up">
                 <div className="p-6 border-b border-slate-100 bg-white">
-                  <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight">Manajemen Remedial PG</h3>
+                  <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight">Manajemen Remedial</h3>
                   <p className="text-xs text-slate-500 font-medium mt-2 max-w-md leading-relaxed">Hapus nilai lama untuk membuka gerbang ujian ulang bagi peserta dengan status <span className="font-bold text-red-500">Tidak Lulus</span>.</p>
                 </div>
                 <div className="overflow-x-auto flex-1 custom-scrollbar flex flex-col">
                    <table className="w-full text-left border-collapse min-w-max flex-1">
                       <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b-2 border-slate-800 sticky top-0">
-                        <tr><th className="px-6 py-4 w-12 text-center">No</th><th className="px-6 py-4">Peserta</th><th className="px-6 py-4 text-center">Skor Lama</th><th className="px-6 py-4 text-right">Opsi</th></tr>
+                        <tr>
+                          <th className="px-6 py-4 w-12 text-center">No</th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('akun')}>Peserta <SortIcon columnKey="akun"/></th>
+                          <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('skor')}>Skor Lama <SortIcon columnKey="skor"/></th>
+                          <th className="px-6 py-4 text-right">Opsi</th>
+                        </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 text-sm">
                         {currentRemedial.map((r, i) => {
