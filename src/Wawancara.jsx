@@ -82,12 +82,26 @@ export default function WawancaraArea() {
       try {
         const res = await fetch(`${GOOGLE_SCRIPT_WEB_APP_URL}?action=init&cb=${new Date().getTime()}`);
         const data = await res.json();
+
+        // --- 🚀 SECURITY CHECK: Blokir jika sudah pernah Esai ---
+        const dataWawancara = data.hasil_wawancara || [];
+        const isAlreadyDone = dataWawancara.some(item => 
+          String(item.email || item.nama_petugas).toLowerCase().trim() === String(user.email).toLowerCase().trim()
+        );
+
+        if (isAlreadyDone) {
+          // Jika data esainya masih ada di database, langsung lempar ke halaman selesai
+          setView('result'); 
+          return; // Hentikan proses render form
+        }
+        // --------------------------------------------------------
+
         setDbSoal(data.soal_wawancara || []);
         setIsLoadingData(false);
       } catch (err) { setIsLoadingData(false); }
     };
     if (view === 'instructions') fetchInitData();
-  }, [view]);
+  }, [view, user.email]);
 
   useEffect(() => {
     if (user.email && view === 'form') {
