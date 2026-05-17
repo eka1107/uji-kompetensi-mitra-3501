@@ -26,39 +26,55 @@ const ProgressBar = ({ percent, color = "bg-[#1A1A1B]" }) => (
 );
 
 // --- KOMPONEN BAR CHART KECAMATAN ---
+// --- KOMPONEN BAR CHART KECAMATAN ---
 const KecamatanProgressChart = ({ data }) => {
-  const { kec, target, mengerjakan, lulus, pctMengerjakan, pctLulus } = data;
+  const { kec, target, mengerjakanPG, mengerjakanEsai, lulusSemua, pctPG, pctEsai, pctLulusSemua } = data;
   return (
     <div className="p-4 bg-white border border-slate-200 rounded-[20px] hover:border-black transition-all group shadow-sm hover:shadow-md relative">
       <div className="flex justify-between items-center mb-4">
         <h4 className="font-black text-xs uppercase tracking-wider text-slate-800 flex items-center gap-2">
           <MapPin size={14} className="text-[#facc15]"/> {kec}
         </h4>
-        <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100" title="Total Pendaftar">Target: {target}</span>
+        <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100">Target: {target}</span>
       </div>
       
       <div className="space-y-4 pt-1">
-        <div className="relative group/bar">
+        {/* Progress PG */}
+        <div className="relative group/bar cursor-pointer">
           <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
-            <span>Mengerjakan</span>
-            <span className="text-[#1A1A1B]">{pctMengerjakan}%</span>
+            <span>Tahap 1 (PG)</span>
+            <span className="text-blue-600 font-bold">{pctPG}%</span>
           </div>
-          <ProgressBar percent={pctMengerjakan} color="bg-[#1A1A1B]" />
-          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#1A1A1B] text-white text-[10px] font-bold px-2.5 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
-            {mengerjakan} dari {target} Peserta ({pctMengerjakan}%)
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#1A1A1B] rotate-45"></div>
+          <ProgressBar percent={pctPG} color="bg-blue-500" />
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+            {mengerjakanPG} dari {target} Peserta ({pctPG}%)
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-blue-600 rotate-45"></div>
           </div>
         </div>
 
-        <div className="relative group/bar">
+        {/* Progress Esai */}
+        <div className="relative group/bar cursor-pointer">
           <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
-            <span>Lulus PG</span>
-            <span className="text-yellow-600">{pctLulus}%</span>
+            <span>Tahap 2 (Esai)</span>
+            <span className="text-emerald-600 font-bold">{pctEsai}%</span>
           </div>
-          <ProgressBar percent={pctLulus} color="bg-[#facc15]" />
-          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-[#facc15] text-[#1A1A1B] text-[10px] font-bold px-2.5 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
-            {lulus} Lulus ({pctLulus}%)
-            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#facc15] rotate-45"></div>
+          <ProgressBar percent={pctEsai} color="bg-emerald-500" />
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+            {mengerjakanEsai} dari {target} Peserta ({pctEsai}%)
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-emerald-500 rotate-45"></div>
+          </div>
+        </div>
+
+        {/* Progress Lulus Semua */}
+        <div className="relative group/bar cursor-pointer">
+          <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
+            <span>Lulus Semua</span>
+            <span className="text-yellow-600 font-bold">{pctLulusSemua}%</span>
+          </div>
+          <ProgressBar percent={pctLulusSemua} color="bg-yellow-400" />
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-yellow-500 text-[#1A1A1B] text-[10px] font-bold px-2.5 py-1 rounded-md opacity-0 group-hover/bar:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
+            {lulusSemua} dari {target} Peserta ({pctLulusSemua}%)
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-yellow-500 rotate-45"></div>
           </div>
         </div>
       </div>
@@ -122,7 +138,8 @@ const hitungDurasi = (mulaiStr, selesaiStr) => {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('dashboard'); 
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [showDetailTahap1, setShowDetailTahap1] = useState(false); 
   const [isLoading, setIsLoading] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   
@@ -256,32 +273,6 @@ export default function AdminDashboard() {
   const getJumlahBenar = (skor) => Math.round((skor / 100) * (quizData.length || 100));
   const uniqueDesaList = [...new Set(daftarPeserta.map(p => p.desa).filter(Boolean))].sort();
 
-  let kecamatanStats = KECAMATAN_LIST.map(kec => {
-    const pesertaKec = daftarPeserta.filter(p => (p.kecamatan || '').toUpperCase() === kec.toUpperCase());
-    const target = pesertaKec.length; 
-    const emails = pesertaKec.map(p => p.email.toLowerCase());
-    const hasilKec = adminData.filter(h => emails.includes(h.akun.toLowerCase()));
-    
-    const mengerjakan = hasilKec.length;
-    const lulus = hasilKec.filter(h => h.keterangan === 'LULUS').length;
-
-    const pctMengerjakan = target > 0 ? Math.round((mengerjakan / target) * 100) : 0;
-    const pctLulus = target > 0 ? Math.round((lulus / target) * 100) : 0;
-
-    return { kec, target, mengerjakan, lulus, pctMengerjakan, pctLulus };
-  });
-
-  if (dashFilter) kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
-  kecamatanStats.sort((a, b) => {
-    if (dashSort === 'nama_asc') return a.kec.localeCompare(b.kec);
-    if (dashSort === 'nama_desc') return b.kec.localeCompare(a.kec);
-    if (dashSort === 'prog_desc') return b.pctMengerjakan - a.pctMengerjakan;
-    if (dashSort === 'prog_asc') return a.pctMengerjakan - b.pctMengerjakan;
-    if (dashSort === 'lulus_desc') return b.pctLulus - a.pctLulus;
-    if (dashSort === 'lulus_asc') return a.pctLulus - b.pctLulus;
-    return 0;
-  });
-
   const requestSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -312,36 +303,6 @@ export default function AdminDashboard() {
     });
   };
 
-  // --- FILTERING, SORTING & PAGINATION CALCULATIONS ---
-  
-  const filteredPeserta = daftarPeserta.filter(p => `${p.nama} ${p.email} ${p.desa} ${p.kecamatan || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
-  const sortedPeserta = handleSort(filteredPeserta);
-  const currentPeserta = sortedPeserta.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesPeserta = Math.ceil(sortedPeserta.length / itemsPerPage);
-
-  const mappedHasil = adminData.map(item => {
-    const p = getPesertaInfo(item.akun);
-    return {
-      ...item,
-      nama: p.nama,
-      kecamatan: p.kecamatan || '-',
-      desa: p.desa || '-',
-      durasi: hitungDurasi(item.waktu_mulai, item.waktu_selesai),
-      benar: getJumlahBenar(item.skor)
-    };
-  });
-  const filteredHasil = mappedHasil.filter(item => {
-    const s = `${item.akun} ${item.nama} ${item.desa} ${item.kecamatan}`.toLowerCase();
-    const matchSearch = s.includes(searchTerm.toLowerCase());
-    const matchStatus = filterStatus === 'ALL' || item.keterangan === filterStatus;
-    const matchKecamatan = filterKecamatan === 'ALL' || (item.kecamatan.toUpperCase() === filterKecamatan.toUpperCase());
-    const matchDesa = filterDesa === 'ALL' || (item.desa.toUpperCase() === filterDesa.toUpperCase());
-    return matchSearch && matchStatus && matchKecamatan && matchDesa;
-  });
-  const sortedHasil = handleSort(filteredHasil);
-  const currentDataHasil = sortedHasil.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesHasil = Math.ceil(sortedHasil.length / itemsPerPage);
-
   // --- GROUPING DATA HASIL WAWANCARA (ESAI) BERDASARKAN EMAIL ---
   const groupedWawancaraMap = {};
   hasilWawancara.forEach(item => {
@@ -361,35 +322,7 @@ export default function AdminDashboard() {
   });
   const groupedWawancaraArr = Object.values(groupedWawancaraMap);
 
-  // 1. Array Peserta Sudah Wawancara (Esai)
-  const filteredSudahWawancara = groupedWawancaraArr.filter(item => {
-    const s = `${item.nama_peserta} ${item.email}`.toLowerCase();
-    return s.includes(searchTerm.toLowerCase());
-  });
-  const sortedSudahWawancara = handleSort(filteredSudahWawancara);
-  const currentHasilWawancara = sortedSudahWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesSudahWawancara = Math.ceil(sortedSudahWawancara.length / itemsPerPage);
-
-  // 2. Array Peserta Belum Wawancara (Hanya yang sudah selesai PG)
-  const belumWawancaraArr = adminData.filter(pg => {
-    const emailKey = String(pg.akun).toLowerCase();
-    return !groupedWawancaraMap[emailKey];
-  }).map(item => {
-    const p = getPesertaInfo(item.akun);
-    return { ...item, nama_peserta: p.nama, email: item.akun, kecamatan: p.kecamatan || '-', desa: p.desa || '-' };
-  });
-  const filteredBelumWawancara = belumWawancaraArr.filter(item => {
-    const s = `${item.nama_peserta} ${item.email} ${item.kecamatan} ${item.desa}`.toLowerCase();
-    return s.includes(searchTerm.toLowerCase());
-  });
-  const sortedBelumWawancara = handleSort(filteredBelumWawancara);
-  const currentBelumWawancara = sortedBelumWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesBelumWawancara = Math.ceil(sortedBelumWawancara.length / itemsPerPage);
-
-  const activeWawancaraTotalPages = filterEsaiView === 'sudah' ? totalPagesSudahWawancara : totalPagesBelumWawancara;
-
-
-  // --- 🚀 MAP DATA UNTUK REKAP TERPADU ---
+    // --- 🚀 MAP DATA UNTUK REKAP TERPADU ---
   const mappedRekap = daftarPeserta.map(p => {
     const emailKey = String(p.email).toLowerCase();
     const pgResult = adminData.find(h => String(h.akun).toLowerCase() === emailKey);
@@ -430,6 +363,119 @@ export default function AdminDashboard() {
   const currentRekap = sortedRekap.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesRekap = Math.ceil(sortedRekap.length / itemsPerPage);
 
+  let kecamatanStats = KECAMATAN_LIST.map(kec => {
+    const pesertaKec = daftarPeserta.filter(p => (p.kecamatan || '').toUpperCase() === kec.toUpperCase());
+    const target = pesertaKec.length; 
+    const emails = pesertaKec.map(p => p.email.toLowerCase().trim());
+    
+    const hasilKec = adminData.filter(h => emails.includes(h.akun.toLowerCase().trim()));
+    const mengerjakanPG = hasilKec.length;
+
+    const esaiKec = groupedWawancaraArr.filter(w => emails.includes(w.email.toLowerCase().trim()));
+    const mengerjakanEsai = esaiKec.length;
+
+    const lulusSemua = mappedRekap.filter(r => emails.includes(r.email.toLowerCase().trim()) && r.statusAkhir === 'SELESAI SEMUA').length;
+
+    const pctPG = target > 0 ? Math.round((mengerjakanPG / target) * 100) : 0;
+    const pctEsai = target > 0 ? Math.round((mengerjakanEsai / target) * 100) : 0;
+    const pctLulusSemua = target > 0 ? Math.round((lulusSemua / target) * 100) : 0;
+
+    return { kec, target, mengerjakanPG, mengerjakanEsai, lulusSemua, pctPG, pctEsai, pctLulusSemua };
+  });
+
+  if (dashFilter) kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
+  kecamatanStats.sort((a, b) => {
+    if (dashSort === 'nama_asc') return a.kec.localeCompare(b.kec);
+    if (dashSort === 'nama_desc') return b.kec.localeCompare(a.kec);
+    if (dashSort === 'prog_desc') return b.pctPG - a.pctPG;
+    if (dashSort === 'prog_asc') return a.pctPG - b.pctPG;
+    if (dashSort === 'esai_desc') return b.pctEsai - a.pctEsai;
+    if (dashSort === 'esai_asc') return a.pctEsai - b.pctEsai;
+    if (dashSort === 'lulus_desc') return b.pctLulusSemua - a.pctLulusSemua;
+    if (dashSort === 'lulus_asc') return a.pctLulusSemua - b.pctLulusSemua;
+    return 0;
+  });
+
+  if (dashFilter) kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
+  kecamatanStats.sort((a, b) => {
+    if (dashSort === 'nama_asc') return a.kec.localeCompare(b.kec);
+    if (dashSort === 'nama_desc') return b.kec.localeCompare(a.kec);
+    if (dashSort === 'prog_desc') return b.pctPG - a.pctPG;
+    if (dashSort === 'prog_asc') return a.pctPG - b.pctPG;
+    if (dashSort === 'esai_desc') return b.pctEsai - a.pctEsai;
+    if (dashSort === 'esai_asc') return a.pctEsai - b.pctEsai;
+    return 0;
+  });
+
+  if (dashFilter) kecamatanStats = kecamatanStats.filter(item => item.kec.toLowerCase().includes(dashFilter.toLowerCase()));
+  kecamatanStats.sort((a, b) => {
+    if (dashSort === 'nama_asc') return a.kec.localeCompare(b.kec);
+    if (dashSort === 'nama_desc') return b.kec.localeCompare(a.kec);
+    if (dashSort === 'prog_desc') return b.pctMengerjakan - a.pctMengerjakan;
+    if (dashSort === 'prog_asc') return a.pctMengerjakan - b.pctMengerjakan;
+    if (dashSort === 'lulus_desc') return b.pctLulus - a.pctLulus;
+    if (dashSort === 'lulus_asc') return a.pctLulus - b.pctLulus;
+    return 0;
+  });
+
+  
+
+  // --- FILTERING, SORTING & PAGINATION CALCULATIONS ---
+  
+  const filteredPeserta = daftarPeserta.filter(p => `${p.nama} ${p.email} ${p.desa} ${p.kecamatan || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
+  const sortedPeserta = handleSort(filteredPeserta);
+  const currentPeserta = sortedPeserta.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesPeserta = Math.ceil(sortedPeserta.length / itemsPerPage);
+
+  const mappedHasil = adminData.map(item => {
+    const p = getPesertaInfo(item.akun);
+    return {
+      ...item,
+      nama: p.nama,
+      kecamatan: p.kecamatan || '-',
+      desa: p.desa || '-',
+      durasi: hitungDurasi(item.waktu_mulai, item.waktu_selesai),
+      benar: getJumlahBenar(item.skor)
+    };
+  });
+  const filteredHasil = mappedHasil.filter(item => {
+    const s = `${item.akun} ${item.nama} ${item.desa} ${item.kecamatan}`.toLowerCase();
+    const matchSearch = s.includes(searchTerm.toLowerCase());
+    const matchStatus = filterStatus === 'ALL' || item.keterangan === filterStatus;
+    const matchKecamatan = filterKecamatan === 'ALL' || (item.kecamatan.toUpperCase() === filterKecamatan.toUpperCase());
+    const matchDesa = filterDesa === 'ALL' || (item.desa.toUpperCase() === filterDesa.toUpperCase());
+    return matchSearch && matchStatus && matchKecamatan && matchDesa;
+  });
+  const sortedHasil = handleSort(filteredHasil);
+  const currentDataHasil = sortedHasil.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesHasil = Math.ceil(sortedHasil.length / itemsPerPage);
+
+  // 1. Array Peserta Sudah Wawancara (Esai)
+  const filteredSudahWawancara = groupedWawancaraArr.filter(item => {
+    const s = `${item.nama_peserta} ${item.email}`.toLowerCase();
+    return s.includes(searchTerm.toLowerCase());
+  });
+  const sortedSudahWawancara = handleSort(filteredSudahWawancara);
+  const currentHasilWawancara = sortedSudahWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesSudahWawancara = Math.ceil(sortedSudahWawancara.length / itemsPerPage);
+
+  // 2. Array Peserta Belum Wawancara (Hanya yang sudah selesai PG)
+  const belumWawancaraArr = adminData.filter(pg => {
+    const emailKey = String(pg.akun).toLowerCase();
+    return !groupedWawancaraMap[emailKey];
+  }).map(item => {
+    const p = getPesertaInfo(item.akun);
+    return { ...item, nama_peserta: p.nama, email: item.akun, kecamatan: p.kecamatan || '-', desa: p.desa || '-' };
+  });
+  const filteredBelumWawancara = belumWawancaraArr.filter(item => {
+    const s = `${item.nama_peserta} ${item.email} ${item.kecamatan} ${item.desa}`.toLowerCase();
+    return s.includes(searchTerm.toLowerCase());
+  });
+  const sortedBelumWawancara = handleSort(filteredBelumWawancara);
+  const currentBelumWawancara = sortedBelumWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesBelumWawancara = Math.ceil(sortedBelumWawancara.length / itemsPerPage);
+
+  const activeWawancaraTotalPages = filterEsaiView === 'sudah' ? totalPagesSudahWawancara : totalPagesBelumWawancara;
 
   const sortedSesi = handleSort(activeSessions);
   const currentSesi = sortedSesi.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -673,7 +719,7 @@ export default function AdminDashboard() {
                   <div class="kop-title">KABUPATEN PACITAN</div>
                   <div class="kop-subtitle">Jl. Ronggowarsito No.2 Pacitan, Jawa Timur 63511</div>
                   <div class="kop-subtitle">Telp. (0357) 881304 Website: pacitankab.bps.go.id</div>
-                  <div class="kop-subtitle"> Emai: bps3501@bps.go.if</div>
+                  <div class="kop-subtitle"> Email : bps3501@bps.go.id</div>
                 </td>
               </tr>
             </table>
@@ -729,7 +775,7 @@ export default function AdminDashboard() {
            <div style="display: inline-block; text-align: center; width: 220px;">
               <p style="margin: 0 0 4px 0;">Pacitan, ${tanggalCetak}</p>
               <p style="margin: 0;">Peserta Ujian,</p>
-              <img src="${data.ttd}" style="width: 140px; height: 70px; object-fit: contain; margin: 5px 0;" />
+              <img src="${data.ttd}" style="width: 140px; height: 70px; object-fit: contain; margin: 10px 0;" />
               <p style="margin: 0; font-weight: bold; text-decoration: underline;">${data.nama_peserta}</p>
            </div>
         </div>
@@ -1051,7 +1097,7 @@ export default function AdminDashboard() {
         
         <div className="flex gap-2 items-center">
           <button onClick={fetchData} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs font-black transition-colors shadow-sm">
-            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Segarkan</span>
+            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest"></span>
           </button>
           <button onClick={handleLogout} className="flex items-center gap-2 bg-[#1A1A1B] text-white hover:text-[#facc15] px-4 py-2.5 rounded-xl text-xs font-black transition-colors shadow-md hover:shadow-lg">
             <LogOut className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Keluar</span>
@@ -1095,69 +1141,138 @@ export default function AdminDashboard() {
                 
                 <h2 className="text-2xl font-black text-[#1A1A1B] tracking-tight uppercase border-b-2 border-[#1A1A1B] pb-2 inline-block">Dashboard</h2>
                 
-                {/* Statistik Utama */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
+                {/* Statistik Utama 5 Kartu Terpadu */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  
+                  {/* KOTAK 1: TOTAL PENDAFTAR */}
+                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group flex flex-col justify-between h-[160px]">
                     <div className="flex justify-between items-start mb-4">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Peserta</p><p className="text-3xl font-black text-[#1A1A1B]">{totalPendaftar}</p></div>
-                      <div className="w-10 h-10 bg-[#facc15]/20 text-[#d97706] rounded-xl flex items-center justify-center group-hover:bg-[#facc15] group-hover:text-black transition-colors"><Users size={20}/></div>
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Pendaftar</p><p className="text-3xl font-black text-[#1A1A1B]">{totalPendaftar}</p></div>
+                      <div className="w-10 h-10 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><Users size={20}/></div>
+                    </div>
+                    <div className="pb-1">
+                      {/* <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Database Peserta SE2026</span> */}
                     </div>
                   </div>
 
-                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
-                    <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Partisipasi</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahSudahUjian}</p></div>
-                      <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><CheckCircle2 size={20}/></div>
-                    </div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{persenUjian}% Selesai</span></div>
-                    <ProgressBar percent={persenUjian} color="bg-blue-600"/>
+                  {/* KOTAK 2: TAHAP 1 (PG) - DENGAN FITUR SWIPE DETAIL */}
+                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-blue-500 transition-colors group relative overflow-hidden h-[160px]">
+                    {!showDetailTahap1 ? (
+                      <div className="animate-fade-in h-full flex flex-col justify-between">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tahap 1</p>
+                            <p className="text-3xl font-black text-[#1A1A1B]">{jumlahSudahUjian}</p>
+                          </div>
+                          <div className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors cursor-pointer" onClick={() => setShowDetailTahap1(true)} title="Lihat Detail Lulus/Gagal">
+                            <FileText size={20}/>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{persenUjian}% Selesai</span>
+                            <button onClick={() => setShowDetailTahap1(true)} className="text-[9px] font-bold text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition-colors uppercase tracking-widest">DETAIL</button>
+                          </div>
+                          <ProgressBar percent={persenUjian} color="bg-blue-500"/>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="animate-fade-in h-full flex flex-col justify-between">
+                         <div className="flex justify-between items-center mb-1">
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rincian PG</p>
+                           <button onClick={() => setShowDetailTahap1(false)} className="text-[9px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded flex items-center gap-1 transition-colors uppercase tracking-widest"><ChevronLeft size={12}/> KEMBALI</button>
+                         </div>
+                         <div className="flex-1 flex flex-col gap-2.5 justify-end pb-1">
+                            <div>
+                              <div className="flex justify-between text-[9px] font-black uppercase text-emerald-600 mb-1 tracking-widest"><span>Lulus PG ({jumlahLulus})</span><span>{persenLulus}%</span></div>
+                              <ProgressBar percent={persenLulus} color="bg-emerald-500" />
+                            </div>
+                            <div>
+                              <div className="flex justify-between text-[9px] font-black uppercase text-red-500 mb-1 tracking-widest"><span>Gagal PG ({totalGagal})</span><span>{persenRemedial}%</span></div>
+                              <ProgressBar percent={persenRemedial} color="bg-red-500" />
+                            </div>
+                         </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
+                  {/* KOTAK 3: TAHAP 2 (ESAI) */}
+                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-emerald-500 transition-colors group flex flex-col justify-between h-[160px]">
                     <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahLulus}</p></div>
-                      <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><ListFilter size={20}/></div>
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tahap 2</p>
+                        <p className="text-3xl font-black text-[#1A1A1B]">{groupedWawancaraArr.length}</p>
+                      </div>
+                      <div className="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                        <MessageCircle size={20}/>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{persenLulus}% Lulus</span></div>
-                    <ProgressBar percent={persenLulus} color="bg-emerald-500"/>
+                    <div className="pb-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{totalPendaftar > 0 ? Math.round((groupedWawancaraArr.length/totalPendaftar)*100) : 0}% Selesai</span>
+                      </div>
+                      <ProgressBar percent={totalPendaftar > 0 ? Math.round((groupedWawancaraArr.length/totalPendaftar)*100) : 0} color="bg-emerald-500"/>
+                    </div>
                   </div>
 
-                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
-                    <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tidak Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{totalGagal}</p></div>
-                      <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><AlertTriangle size={20}/></div>
+                  {/* KOTAK 4: SELESAI SEMUA */}
+                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-yellow-500 transition-colors group relative overflow-hidden flex flex-col justify-between h-[160px]">
+                    <div className="absolute right-0 top-0 w-16 h-16 bg-yellow-400 rounded-bl-[100px] opacity-20 pointer-events-none"></div>
+                    <div className="flex justify-between items-start mb-2 relative z-10">
+                      <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Semua Tahap</p>
+                        <p className="text-3xl font-black text-[#1A1A1B]">{mappedRekap.filter(r => r.statusAkhir === 'SELESAI SEMUA').length}</p>
+                      </div>
+                      <div className="w-10 h-10 bg-yellow-50 text-yellow-600 rounded-xl flex items-center justify-center group-hover:bg-yellow-400 group-hover:text-black transition-colors">
+                        <CheckCircle2 size={20}/>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{persenRemedial}% Tidak Lulus</span></div>
-                    <ProgressBar percent={persenRemedial} color="bg-red-500"/>
+                    <div className="relative z-10 pb-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{totalPendaftar > 0 ? Math.round((mappedRekap.filter(r => r.statusAkhir === 'SELESAI SEMUA').length / totalPendaftar) * 100) : 0}% Selesai</span>
+                      </div>
+                      <ProgressBar percent={totalPendaftar > 0 ? Math.round((mappedRekap.filter(r => r.statusAkhir === 'SELESAI SEMUA').length / totalPendaftar) * 100) : 0} color="bg-yellow-400"/>
+                    </div>
                   </div>
+
+                  {/* KOTAK 5: SESI AKTIF */}
+                  <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-orange-500 transition-colors group flex flex-col justify-between h-[160px]">
+                    <div className="flex justify-between items-start mb-4">
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Sesi Ujian Aktif</p><p className="text-3xl font-black text-[#1A1A1B]">{activeSessions.length}</p></div>
+                      <div className="w-10 h-10 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-colors"><Activity size={20}/></div>
+                    </div>
+                    <div className="pb-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Peserta Sedang Online</span>
+                    </div>
+                  </div>
+
                 </div>
 
-                {/* SATU BARCHART TERPADU UNTUK 12 KECAMATAN */}
+                {/* DUAL BARCHART TERPADU UNTUK 12 KECAMATAN */}
                 <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 p-6 md:p-8">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Terpadu Kecamatan</h3>
+                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Kecamatan</h3>
                       <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Kabupaten Pacitan</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      {/* Filter Search */}
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
                         <input type="text" placeholder="Cari kecamatan..." value={dashFilter} onChange={e => setDashFilter(e.target.value)} className="w-full sm:w-40 pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/>
                       </div>
-                      {/* Filter Sort */}
                       <select value={dashSort} onChange={e => setDashSort(e.target.value)} className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 outline-none focus:border-black cursor-pointer text-slate-600">
                          <option value="nama_asc">Nama (A-Z)</option>
                          <option value="nama_desc">Nama (Z-A)</option>
-                         <option value="prog_desc">Progress Tertinggi</option>
-                         <option value="prog_asc">Progress Terendah</option>
-                         <option value="lulus_desc">Lulus Tertinggi</option>
-                         <option value="lulus_asc">Lulus Terendah</option>
+                         <option value="prog_desc">Progress PG Tertinggi</option>
+                         <option value="prog_asc">Progress PG Terendah</option>
+                         <option value="esai_desc">Progress Esai Tertinggi</option>
+                         <option value="esai_asc">Progress Esai Terendah</option>
+                         <option value="lulus_desc">Lulus Semua Tertinggi</option>
+                         <option value="lulus_asc">Lulus Semua Terendah</option>
                       </select>
-                      {/* Legend */}
                       <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
-                        <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#1A1A1B]"></div> Mengerjakan</span>
-                        <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#facc15]"></div> Lulus</span>
+                        <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-blue-500"></div> PG</span>
+                        <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-emerald-500"></div> Esai</span>
                       </div>
                     </div>
                   </div>
