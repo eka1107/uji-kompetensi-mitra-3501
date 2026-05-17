@@ -1,3 +1,4 @@
+// --- ParticipantLogin.jsx ---
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, CalendarClock, Loader2 } from 'lucide-react';
@@ -8,7 +9,7 @@ export default function ParticipantLogin() {
   const [view, setView] = useState('init'); 
   const [user, setUser] = useState({ email: '', token: '', namaLengkap: '' });
   const [loginError, setLoginError] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isLoggingIn, setIsLoadingIn] = useState(false);
   const [emailWarning, setEmailWarning] = useState('');
   const [loadingLogo, setLoadingLogo] = useState(LOGO_BPS);
   const [globalState, setGlobalState] = useState(null);
@@ -54,7 +55,14 @@ export default function ParticipantLogin() {
           return { id: `q_${index}`, text: String(row.soal), shuffledOptions: shuffleArray(rawOptions), answer: String(row.jawaban).trim().toUpperCase() };
         });
 
-        setGlobalState({ accounts: data.akun, adminData: data.nilai, quizData: shuffleArray(formattedQuestions), jadwalServer });
+        setGlobalState({ 
+          accounts: data.akun, 
+          adminData: data.nilai, 
+          hasilWawancara: data.hasil_wawancara || [], 
+          quizData: shuffleArray(formattedQuestions), 
+          jadwalServer 
+        });
+        
         const statusJadwal = checkJadwal(jadwalServer.mulai, jadwalServer.selesai);
         if (statusJadwal !== 'buka') setView(statusJadwal);
         else setView('login');
@@ -81,23 +89,41 @@ export default function ParticipantLogin() {
     const isValidUser = globalState.accounts.find(acc => String(acc.email).trim().toLowerCase() === String(user.email).trim().toLowerCase());
 
     if (isValidUser) {
-      setIsLoggingIn(true);
-      const historyAttempts = globalState.adminData.filter(row => row.akun && String(row.akun).trim().toLowerCase() === String(user.email).trim().toLowerCase());
-      if (historyAttempts.length >= 1) {
-        setLoginError(`Anda telah menyelesaikan Ujian. Hubungi kami jika butuh bantuan`);
-        setIsLoggingIn(false); return;
+      setIsLoadingIn(true);
+      const finalUser = { ...user, namaLengkap: isValidUser.nama };
+      
+      // =======================================================
+      // 🛡️ PERBAIKAN LOGIKA VALIDASI: STRIKTIF BERDASARKAN KOLOM A (EMAIL)
+      // =======================================================
+      const sudahUjianPG = globalState.adminData.find(n => String(n.akun).trim().toLowerCase() === String(user.email).trim().toLowerCase());
+      
+      // Validasi mutlak mencocokkan email peserta dengan Kolom A (email) di sheet hasil_wawancara
+      const sudahIsiEsai = globalState.hasilWawancara.find(h => 
+        String(h.email).trim().toLowerCase() === String(user.email).trim().toLowerCase()
+      );
+
+      if (sudahUjianPG && sudahIsiEsai) {
+         setLoginError("Anda sudah menyelesaikan seluruh rangkaian tes kompetensi, hubungi panitia jika terdapat kendala");
+         setIsLoadingIn(false);
+         return;
       }
 
-      const finalUser = { ...user, namaLengkap: isValidUser.nama };
-      const attemptCount = historyAttempts.length + 1;
-      
       setView('fetching_soal');
       setTimeout(() => {
-        navigate('/quiz', { 
-          replace: true, 
-          state: { user: finalUser, quizData: globalState.quizData, jadwalServer: globalState.jadwalServer, attemptCount, startTime: getLocalTime() }
-        });
+        if (sudahUjianPG && !sudahIsiEsai) {
+           // SUDAH PG TAPI BELUM ESAI -> LEMPAR KE PORTAL WAWANCARA (ESAI)
+           navigate('/wawancara', { state: { user: finalUser, jadwalServer: globalState.jadwalServer } });
+        } else {
+           // BELUM PG -> LEMPAR KE QUIZAREA (PILIHAN GANDA)
+           const historyAttempts = globalState.adminData.filter(row => row.akun && String(row.akun).trim().toLowerCase() === String(user.email).trim().toLowerCase());
+           const attemptCount = historyAttempts.length + 1;
+           navigate('/quiz', { 
+             replace: true, 
+             state: { user: finalUser, quizData: globalState.quizData, jadwalServer: globalState.jadwalServer, attemptCount, startTime: getLocalTime() }
+           });
+        }
       }, 1500);
+      // =======================================================
 
     } else { setLoginError('Alamat email tidak terdaftar.'); }
   };

@@ -5,7 +5,7 @@ import {
   LayoutDashboard, LogOut, Users, CheckCircle2, XCircle, Clock, Activity,
   UserPlus, FileSpreadsheet, Trash2, Download, Search, CalendarClock, Shield, Save, Filter, ChevronLeft, ChevronRight,
   Database, RefreshCw, Edit3, X, Lock, Settings, DownloadCloud, AlertTriangle, Menu, ListFilter, FileText, Check, Info, Loader2, BarChart3,
-  UserCheck, MessageCircle, ClipboardList, MapPin, TrendingUp, Printer
+  UserCheck, MessageCircle, ClipboardList, MapPin, TrendingUp, Printer, Layers
 } from 'lucide-react';
 import { GOOGLE_SCRIPT_WEB_APP_URL, LOGO_BPS } from './config.js';
 
@@ -52,7 +52,7 @@ const KecamatanProgressChart = ({ data }) => {
 
         <div className="relative group/bar">
           <div className="flex justify-between text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1">
-            <span>Lulus</span>
+            <span>Lulus PG</span>
             <span className="text-yellow-600">{pctLulus}%</span>
           </div>
           <ProgressBar percent={pctLulus} color="bg-[#facc15]" />
@@ -133,13 +133,10 @@ export default function AdminDashboard() {
   const [activeSessions, setActiveSessions] = useState([]); 
   const [detailAnswers, setDetailAnswers] = useState([]); 
   
-  // --- STATE DATA WAWANCARA ---
-  const [daftarPetugas, setDaftarPetugas] = useState([]);
   const [soalWawancara, setSoalWawancara] = useState([]);
   const [hasilWawancara, setHasilWawancara] = useState([]);
   
   // --- STATE FORM ---
-  const [newPetugas, setNewPetugas] = useState({ nama_petugas: '', email_petugas: '' });
   const [adminSettingForm, setAdminSettingForm] = useState({ email: '', password: '' });
   const [jadwalForm, setJadwalForm] = useState({ mulai: '', selesai: '', durasi: 45 });
   const [newPeserta, setNewPeserta] = useState({ email: '', password: '', nama: '', desa: '', kecamatan: 'Pacitan' });
@@ -151,14 +148,18 @@ export default function AdminDashboard() {
   const [filterDesa, setFilterDesa] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(15); 
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); // Universal Sorting State
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' }); 
 
   const [dashFilter, setDashFilter] = useState('');
   const [dashSort, setDashSort] = useState('nama_asc');
+  
+  const [filterEsaiView, setFilterEsaiView] = useState('sudah'); 
+  const [filterStatusRekap, setFilterStatusRekap] = useState('ALL'); 
 
   // --- MODALS ---
   const [editModal, setEditModal] = useState({ isOpen: false, oldEmail: '', data: { email: '', password: '', nama: '', desa: '', kecamatan: '' } });
   const [viewDetailModal, setViewDetailModal] = useState({ isOpen: false, email: '', nama: '', skor: 0, keterangan: '', data: [] });
+  const [viewWawancaraModal, setViewWawancaraModal] = useState({ isOpen: false, data: null });
   const [alertModal, setAlertModal] = useState({ isOpen: false, title: '', message: '' });
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', action: null });
 
@@ -171,10 +172,11 @@ export default function AdminDashboard() {
     if (window.innerWidth >= 768) setIsSidebarOpen(true);
   }, [navigate]);
 
-  // Reset Sorting saat pindah Tab
   useEffect(() => {
     setSortConfig({ key: null, direction: 'asc' });
     setCurrentPage(1);
+    setFilterEsaiView('sudah');
+    setFilterStatusRekap('ALL');
   }, [activeTab]);
 
   const fetchData = async () => {
@@ -184,7 +186,6 @@ export default function AdminDashboard() {
       const data = await res.json();
       if (data.status === "success") {
         
-        // FILTER ANTI DUPLIKAT HASIL UJIAN
         const rawNilai = data.nilai || [];
         const uniqueNilai = rawNilai.filter((v, i, a) => 
           a.findIndex(t => String(t.akun).toLowerCase() === String(v.akun).toLowerCase()) === i
@@ -194,7 +195,6 @@ export default function AdminDashboard() {
         setDaftarPeserta(data.akun || []);
         setQuizData(data.soal || []);
         
-        // --- 🚀 FITUR BARU: AUTO-RESET SESI > 24 JAM ---
         const rawSesi = data.sesi_aktif || [];
         const uniqueSesi = rawSesi.filter((v, i, a) => a.findIndex(t => (t.email === v.email)) === i);
         
@@ -212,22 +212,18 @@ export default function AdminDashboard() {
             startMs = new Date(year, month - 1, day, timeParts[0] || 0, timeParts[1] || 0, timeParts[2] || 0).getTime();
           } catch(e) {}
           
-          // Jika sesi lebih tua dari 24 Jam (86.400.000 ms)
           if (startMs > 0 && (now - startMs) > 86400000) {
-            // Hapus otomatis di Background ke Server
             fetch(GOOGLE_SCRIPT_WEB_APP_URL, { 
               method: 'POST', mode: 'no-cors', 
               body: JSON.stringify({ action: "delete_sesi", email: s.email }) 
             });
           } else {
-            validSesi.push(s); // Masukkan ke tampilan jika masih baru
+            validSesi.push(s); 
           }
         });
         
         setActiveSessions(validSesi);
-        
         setDetailAnswers(data.detail_jawaban || []);
-        setDaftarPetugas(data.petugas || []);
         setSoalWawancara(data.soal_wawancara || []);
         setHasilWawancara(data.hasil_wawancara || []);
         
@@ -244,7 +240,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => { sessionStorage.removeItem('adminAuth_SE2026'); navigate('/admin'); };
 
-  // --- STATISTIK ---
+  // --- STATISTIK UMUM ---
   const totalPendaftar = daftarPeserta.length;
   const jumlahSudahUjian = adminData.length;
   const daftarRemedial = adminData.filter(d => d.keterangan === 'TIDAK LULUS');
@@ -260,7 +256,6 @@ export default function AdminDashboard() {
   const getJumlahBenar = (skor) => Math.round((skor / 100) * (quizData.length || 100));
   const uniqueDesaList = [...new Set(daftarPeserta.map(p => p.desa).filter(Boolean))].sort();
 
-  // --- LOGIKA PROGRESS KECAMATAN ---
   let kecamatanStats = KECAMATAN_LIST.map(kec => {
     const pesertaKec = daftarPeserta.filter(p => (p.kecamatan || '').toUpperCase() === kec.toUpperCase());
     const target = pesertaKec.length; 
@@ -287,7 +282,6 @@ export default function AdminDashboard() {
     return 0;
   });
 
-  // --- 🚀 FITUR BARU: LOGIKA SORTING TABEL UNIVERSAL ---
   const requestSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
@@ -320,18 +314,11 @@ export default function AdminDashboard() {
 
   // --- FILTERING, SORTING & PAGINATION CALCULATIONS ---
   
-  // 1. Peserta
   const filteredPeserta = daftarPeserta.filter(p => `${p.nama} ${p.email} ${p.desa} ${p.kecamatan || ''}`.toLowerCase().includes(searchTerm.toLowerCase()));
   const sortedPeserta = handleSort(filteredPeserta);
   const currentPeserta = sortedPeserta.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesPeserta = Math.ceil(sortedPeserta.length / itemsPerPage);
 
-  // 2. Petugas
-  const sortedPetugas = handleSort(daftarPetugas);
-  const currentPetugas = sortedPetugas.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesPetugas = Math.ceil(sortedPetugas.length / itemsPerPage);
-
-  // 3. Hasil Ujian (Map Data Terlebih Dahulu Agar Bisa Disorting Berdasarkan Nama/Desa dll)
   const mappedHasil = adminData.map(item => {
     const p = getPesertaInfo(item.akun);
     return {
@@ -355,26 +342,103 @@ export default function AdminDashboard() {
   const currentDataHasil = sortedHasil.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesHasil = Math.ceil(sortedHasil.length / itemsPerPage);
 
-  // 4. Hasil Wawancara
-  const filteredHasilWawancara = hasilWawancara.filter(item => {
-    const s = `${item.nama_peserta} ${item.nama_petugas} ${item.keterangan}`.toLowerCase();
+  // --- GROUPING DATA HASIL WAWANCARA (ESAI) BERDASARKAN EMAIL ---
+  const groupedWawancaraMap = {};
+  hasilWawancara.forEach(item => {
+    const emailKey = String(item.email || item.nama_petugas || '').toLowerCase(); // Fallback ke old key
+    if (!emailKey) return;
+    if (!groupedWawancaraMap[emailKey]) {
+      groupedWawancaraMap[emailKey] = {
+        email: item.email || item.nama_petugas, 
+        nama_peserta: item.nama_peserta || '-',
+        waktu_mulai: item.waktu_mulai || '-',
+        waktu_selesai: item.waktu_selesai || '-',
+        ttd: item.ttd || '', //TAMBAHKAN BARIS INI UNTUK MENGAMBIL TTD
+        qa: []
+      };
+    }
+    groupedWawancaraMap[emailKey].qa.push({ pertanyaan: item.pertanyaan, jawaban: item.jawaban });
+  });
+  const groupedWawancaraArr = Object.values(groupedWawancaraMap);
+
+  // 1. Array Peserta Sudah Wawancara (Esai)
+  const filteredSudahWawancara = groupedWawancaraArr.filter(item => {
+    const s = `${item.nama_peserta} ${item.email}`.toLowerCase();
     return s.includes(searchTerm.toLowerCase());
   });
-  const sortedWawancara = handleSort(filteredHasilWawancara);
-  const currentHasilWawancara = sortedWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const totalPagesWawancara = Math.ceil(sortedWawancara.length / itemsPerPage);
+  const sortedSudahWawancara = handleSort(filteredSudahWawancara);
+  const currentHasilWawancara = sortedSudahWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesSudahWawancara = Math.ceil(sortedSudahWawancara.length / itemsPerPage);
 
-  // 5. Sesi Aktif
+  // 2. Array Peserta Belum Wawancara (Hanya yang sudah selesai PG)
+  const belumWawancaraArr = adminData.filter(pg => {
+    const emailKey = String(pg.akun).toLowerCase();
+    return !groupedWawancaraMap[emailKey];
+  }).map(item => {
+    const p = getPesertaInfo(item.akun);
+    return { ...item, nama_peserta: p.nama, email: item.akun, kecamatan: p.kecamatan || '-', desa: p.desa || '-' };
+  });
+  const filteredBelumWawancara = belumWawancaraArr.filter(item => {
+    const s = `${item.nama_peserta} ${item.email} ${item.kecamatan} ${item.desa}`.toLowerCase();
+    return s.includes(searchTerm.toLowerCase());
+  });
+  const sortedBelumWawancara = handleSort(filteredBelumWawancara);
+  const currentBelumWawancara = sortedBelumWawancara.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesBelumWawancara = Math.ceil(sortedBelumWawancara.length / itemsPerPage);
+
+  const activeWawancaraTotalPages = filterEsaiView === 'sudah' ? totalPagesSudahWawancara : totalPagesBelumWawancara;
+
+
+  // --- 🚀 MAP DATA UNTUK REKAP TERPADU ---
+  const mappedRekap = daftarPeserta.map(p => {
+    const emailKey = String(p.email).toLowerCase();
+    const pgResult = adminData.find(h => String(h.akun).toLowerCase() === emailKey);
+    const esaiResult = groupedWawancaraArr.find(w => String(w.email).toLowerCase() === emailKey);
+
+    let statusPG = 'BELUM UJIAN';
+    let skorPG = '-';
+    if (pgResult) {
+       statusPG = pgResult.keterangan; 
+       skorPG = pgResult.skor;
+    }
+
+    let statusEsai = 'BELUM ESAI';
+    if (esaiResult) statusEsai = 'SUDAH ESAI';
+
+    let statusAkhir = 'BELUM MULAI';
+    if (statusPG === 'LULUS' && statusEsai === 'SUDAH ESAI') statusAkhir = 'SELESAI SEMUA';
+    else if (statusPG === 'TIDAK LULUS') statusAkhir = 'GAGAL PG';
+    else if (statusPG === 'LULUS' && statusEsai === 'BELUM ESAI') statusAkhir = 'LULUS PG (BELUM ESAI)';
+    else if (statusPG !== 'BELUM UJIAN') statusAkhir = 'PROSES';
+
+    return {
+      ...p,
+      skorPG,
+      statusPG,
+      statusEsai,
+      statusAkhir
+    }
+  });
+
+  const filteredRekap = mappedRekap.filter(item => {
+    const s = `${item.nama} ${item.email} ${item.desa} ${item.kecamatan}`.toLowerCase();
+    const matchSearch = s.includes(searchTerm.toLowerCase());
+    const matchFilter = filterStatusRekap === 'ALL' || item.statusAkhir === filterStatusRekap;
+    return matchSearch && matchFilter;
+  });
+  const sortedRekap = handleSort(filteredRekap);
+  const currentRekap = sortedRekap.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPagesRekap = Math.ceil(sortedRekap.length / itemsPerPage);
+
+
   const sortedSesi = handleSort(activeSessions);
   const currentSesi = sortedSesi.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesSesi = Math.ceil(sortedSesi.length / itemsPerPage);
 
-  // 6. Remedial
   const sortedRemedial = handleSort(daftarRemedial);
   const currentRemedial = sortedRemedial.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesRemedial = Math.ceil(sortedRemedial.length / itemsPerPage);
 
-  // 7. Soal PG & Wawancara
   const sortedSoal = handleSort(quizData);
   const currentSoal = sortedSoal.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPagesSoal = Math.ceil(sortedSoal.length / itemsPerPage);
@@ -384,7 +448,7 @@ export default function AdminDashboard() {
   const totalPagesSoalWawancara = Math.ceil(sortedSoalWawancara.length / itemsPerPage);
 
 
-  // --- LOGIKA EXPORT ---
+  // --- LOGIKA EXPORT & DELETE ---
   const exportHasilToCSV = () => {
     const headers = ["No", "Selesai", "Nama", "Email", "Kecamatan", "Desa", "Benar", "Skor", "Durasi", "Status"];
     let csv = headers.join(",") + "\n";
@@ -395,6 +459,20 @@ export default function AdminDashboard() {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `Hasil_CAT_SE2026_${new Date().toLocaleDateString('id-ID')}.csv`;
+    link.click();
+  };
+
+  // 🚀 Ekspor Rekap Terpadu
+  const exportRekapToCSV = () => {
+    const headers = ["No", "Nama Peserta", "Email", "Kecamatan", "Desa", "Skor PG", "Status PG", "Status Esai", "Status Akhir"];
+    let csv = headers.join(",") + "\n";
+    sortedRekap.forEach((r, i) => {
+      csv += `${i+1},"${r.nama}","${r.email}","${r.kecamatan}","${r.desa}","${r.skorPG}","${r.statusPG}","${r.statusEsai}","${r.statusAkhir}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Rekap_Terpadu_SE2026_${new Date().toLocaleDateString('id-ID')}.csv`;
     link.click();
   };
 
@@ -458,6 +536,230 @@ export default function AdminDashboard() {
     setTimeout(() => { printWindow.print(); }, 300);
   };
 
+  // --- LOGIKA CETAK ESAI WAWANCARA (FORMAT FORMAL BPS A4) ---
+  // --- LOGIKA CETAK ESAI WAWANCARA (FORMAT RESMI BPS A4 - MARGIN @PAGE 3CM & FULL UNDERLINE) ---
+  // --- LOGIKA CETAK ESAI WAWANCARA (FORMAT RESMI BPS A4 - MARGIN @PAGE 3CM & DYNAMIC RE-INDEX) ---
+  // --- LOGIKA CETAK ESAI WAWANCARA (MARGIN 3CM, NO. DINAMIS, FONT KETIK, & TTD) ---
+  const exportWawancaraToPDF = (data) => {
+    if (!data) return;
+    
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("Browser memblokir pop-up. Mohon izinkan pop-up (Allow Pop-ups) untuk mencetak dokumen.");
+      return;
+    }
+
+    let html = `
+      <html>
+        <head>
+          <title>Hasil Esai - ${data.nama_peserta || 'Peserta'}</title>
+          <style>
+            /* Mengunci Margin 3cm secara mutlak di setiap halaman */
+            @page { 
+              size: A4; 
+              margin: 3cm; 
+            }
+            
+            body { 
+              font-family: Arial, Helvetica, sans-serif; 
+              font-size: 11pt; 
+              color: #000; 
+              line-height: 1.6;
+              margin: 0;
+              padding: 0;
+            }
+            
+            /* Desain Kop Surat Resmi BPS */
+            .kop-surat {
+              width: 100%;
+              border-bottom: 3px double black; 
+              padding-bottom: 10px;
+              margin-bottom: 25px;
+            }
+            .kop-table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            .kop-logo {
+              width: 90px;
+              vertical-align: middle;
+              text-align: left;
+            }
+            .kop-logo img {
+              width: 80px;
+              height: auto;
+            }
+            .kop-text {
+              text-align: center;
+              vertical-align: middle;
+              padding-right: 90px; 
+            }
+            .kop-title {
+              font-size: 14pt;
+              font-weight: bold;
+              margin: 0;
+              line-height: 1.2;
+            }
+            .kop-subtitle {
+              font-size: 10pt;
+              margin: 5px 0 0 0;
+            }
+            
+            /* Desain Judul Lembar */
+            .title { 
+              text-align: center; 
+              font-weight: bold; 
+              // text-decoration: underline; 
+              margin-bottom: 25px; 
+              font-size: 12pt; 
+            }
+            .info-table { 
+              margin-bottom: 20px; 
+              width: 100%; 
+              border-collapse: collapse;
+            }
+            .info-table td { 
+              padding: 5px; 
+              vertical-align: top; 
+            }
+            
+            /* Format Penomoran Sejajar Lurus (Hanging Indent) */
+            .qa-container { 
+              display: table;
+              width: 100%;
+              margin-bottom: 25px; 
+            }
+            .qa-num {
+              display: table-cell;
+              width: 25px;
+              font-weight: bold;
+              vertical-align: top;
+            }
+            .qa-content {
+              display: table-cell;
+              vertical-align: top;
+            }
+            .question { 
+              font-weight: bold; 
+              margin-bottom: 8px; 
+              text-align: justify;
+            }
+            
+            /* 🚀 JAWABAN: Font Mesin Ketik + Garis Bawah di SETIAP baris kalimat */
+            .answer { 
+              font-family: 'Courier New', Courier, monospace; /* FONT KETIK */
+              font-size: 10.5pt;
+              text-align: justify; 
+              text-decoration: underline; 
+              text-underline-offset: 5px; 
+              margin-top: 6px;
+              width: 100%;
+              display: block;
+              white-space: pre-wrap; 
+              word-wrap: break-word;
+            }
+          </style>
+        </head>
+        <body>
+          
+          <div class="kop-surat">
+            <table class="kop-table">
+              <tr>
+                <td class="kop-logo">
+                  <img src="${LOGO_BPS}" alt="Logo BPS" />
+                </td>
+                <td class="kop-text">
+                  <div class="kop-title">BADAN PUSAT STATISTIK</div>
+                  <div class="kop-title">KABUPATEN PACITAN</div>
+                  <div class="kop-subtitle">Jl. Ronggowarsito No.2 Pacitan, Jawa Timur 63511</div>
+                  <div class="kop-subtitle">Telp. (0357) 881304 Website: pacitankab.bps.go.id</div>
+                  <div class="kop-subtitle"> Emai: bps3501@bps.go.if</div>
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <div class="title">LEMBAR JAWABAN TES ESAI (WAWANCARA ONLINE)</div>
+          
+          <table class="info-table">
+            <tr><td><strong>Email Akun</strong></td><td>:</td><td>${data.email || '-'}</td></tr>
+            <tr><td><strong>Waktu Mulai</strong></td><td>:</td><td>${data.waktu_mulai || '-'}</td></tr>
+            <tr><td><strong>Waktu Selesai</strong></td><td>:</td><td>${data.waktu_selesai || '-'}</td></tr>
+    `;
+
+    let questionsHtml = '';
+    let testQuestionCounter = 1;
+
+    if (data.qa && Array.isArray(data.qa)) {
+      data.qa.forEach((item, index) => {
+        const pert = item.pertanyaan || 'Pertanyaan tidak tersedia.';
+        const jaw = String(item.jawaban || '-').trim() === "" ? "-" : String(item.jawaban);
+        
+        if (index < 3) {
+          // Soal 1, 2, 3 (Data diri) dibuat sejajar di atas tanpa nomor, font jawaban mesin ketik
+          html += `
+            <tr>
+              <td><strong>${pert}</strong></td>
+              <td>:</td>
+              <td style="font-family: 'Courier New', Courier, monospace; font-size: 10.5pt; text-decoration: underline; text-underline-offset: 5px;">${jaw}</td>
+            </tr>
+          `;
+        } else {
+          // Pertanyaan esai dimulai dengan nomor urut 1
+          questionsHtml += `
+            <div class="qa-container">
+              <div class="qa-num">${testQuestionCounter}.</div>
+              <div class="qa-content">
+                <div class="question">${pert}</div>
+                <div class="answer">${jaw}</div>
+              </div>
+            </div>
+          `;
+          testQuestionCounter++;
+        }
+      });
+    }
+
+    // 🚀 MERENDER KANVAS TANDA TANGAN DI BAGIAN BAWAH JIKA ADA
+    let ttdHtml = '';
+    if (data.ttd && data.ttd.trim() !== '') {
+      const tanggalCetak = data.waktu_selesai ? data.waktu_selesai.split(' ')[0] : '...........';
+      ttdHtml = `
+        <div style="width: 100%; text-align: right; margin-top: 40px; page-break-inside: avoid;">
+           <div style="display: inline-block; text-align: center; width: 220px;">
+              <p style="margin: 0 0 4px 0;">Pacitan, ${tanggalCetak}</p>
+              <p style="margin: 0;">Peserta Ujian,</p>
+              <img src="${data.ttd}" style="width: 140px; height: 70px; object-fit: contain; margin: 5px 0;" />
+              <p style="margin: 0; font-weight: bold; text-decoration: underline;">${data.nama_peserta}</p>
+           </div>
+        </div>
+      `;
+    }
+
+    html += `</table><br/>` + questionsHtml + ttdHtml + `</body></html>`;
+    
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    setTimeout(() => { 
+      printWindow.print(); 
+    }, 500); 
+  };
+
+  // --- 🚀 FITUR HAPUS HASIL WAWANCARA ---
+  const requestDeleteWawancara = (email) => {
+    showConfirm('Hapus Esai Wawancara', `Hapus seluruh data esai wawancara untuk ${email}? Ini akan memungkinkan peserta untuk mengisi ulang.`, () => {
+      setHasilWawancara(prev => prev.filter(h => String(h.email || h.nama_petugas).toLowerCase() !== String(email).toLowerCase()));
+      fetch(GOOGLE_SCRIPT_WEB_APP_URL, { 
+        method: 'POST', 
+        mode: 'no-cors', 
+        body: JSON.stringify({ action: "delete_wawancara", email: email }) 
+      });
+      showAlert('Berhasil', 'Data wawancara peserta tersebut berhasil dihapus.');
+    });
+  };
+
   // --- LOGIKA SETTINGS & CRUD ---
   const requestSaveJadwal = (e) => {
     e.preventDefault();
@@ -474,21 +776,6 @@ export default function AdminDashboard() {
       const payload = { action: "update_admin", email: adminSettingForm.email, password: adminSettingForm.password };
       fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
       showAlert('Berhasil', 'Kredensial Admin diperbarui!');
-    });
-  };
-
-  const handleAddPetugas = (e) => {
-    e.preventDefault();
-    if (!newPetugas.email_petugas) return;
-    setDaftarPetugas([{ ...newPetugas }, ...daftarPetugas]);
-    showAlert('Sukses', 'Petugas baru ditambahkan ke tabel UI. Sinkronisasi backend otomatis dilakukan.');
-    setNewPetugas({ nama_petugas: '', email_petugas: '' });
-  };
-
-  const requestDeletePetugas = (email) => {
-    showConfirm('Hapus Petugas', 'Hapus akses petugas ini selamanya?', () => {
-      setDaftarPetugas(prev => prev.filter(p => p.email_petugas !== email));
-      showAlert('Berhasil', 'Data petugas telah dihapus dari tabel.');
     });
   };
 
@@ -524,7 +811,6 @@ export default function AdminDashboard() {
     });
   };
 
-  // --- LOGIKA RESET SESI NYANTOL ---
   const requestResetSesi = (email) => {
     showConfirm('Reset Sesi Peserta', `Hapus sesi aktif untuk ${email}? Tindakan ini akan mengizinkan peserta login kembali untuk ujian ulang.`, () => {
       setActiveSessions(prev => prev.filter(s => s.email !== email));
@@ -580,7 +866,6 @@ export default function AdminDashboard() {
     reader.readAsText(file);
   };
 
-  // --- LOGIKA HASIL & DETAIL ---
   const openDetailJawaban = (email, nama, skor, keterangan) => {
     const userDetail = detailAnswers.filter(d => String(d.akun).toLowerCase() === String(email).toLowerCase());
     setViewDetailModal({ isOpen: true, email, nama, skor, keterangan, data: userDetail });
@@ -599,8 +884,6 @@ export default function AdminDashboard() {
       fetch(GOOGLE_SCRIPT_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: "delete_hasil_full", akun: akun }) });
     });
   };
-
-  useEffect(() => { setCurrentPage(1); }, [searchTerm, filterStatus, filterKecamatan, filterDesa]);
 
   if (isLoading) {
     return (
@@ -640,17 +923,15 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* --- MODAL DETAIL JAWABAN --- */}
+      {/* --- MODAL DETAIL JAWABAN PG --- */}
       {viewDetailModal.isOpen && (
         <div className="fixed inset-0 bg-[#1A1A1B]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-[24px] w-full max-w-2xl h-[85vh] flex flex-col shadow-2xl animate-scale-in overflow-hidden border border-slate-200">
             <div className="p-6 border-b-2 border-[#1A1A1B] flex justify-between items-center shrink-0 bg-white">
-              
               <div>
                 <h3 className="font-black text-xl text-[#1A1A1B] uppercase tracking-tight">{viewDetailModal.nama}</h3>
                 <p className="text-xs font-bold text-slate-400 font-mono mt-1">{viewDetailModal.email}</p>
               </div>
-              
               <div className="flex items-center gap-5">
                 <div className="text-right hidden sm:block">
                   <p className="text-2xl font-black text-[#1A1A1B] leading-none mb-1">{viewDetailModal.skor}</p>
@@ -660,19 +941,7 @@ export default function AdminDashboard() {
                 </div>
                 <button onClick={() => setViewDetailModal({ ...viewDetailModal, isOpen: false })} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-black"><X size={20}/></button>
               </div>
-
             </div>
-            
-            <div className="sm:hidden px-6 pt-4 pb-3 bg-slate-50 flex justify-between items-center border-b border-slate-200">
-               <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Skor Akhir:</span>
-               <div className="flex items-center gap-3">
-                 <span className="text-lg font-black">{viewDetailModal.skor}</span>
-                 <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${viewDetailModal.keterangan === 'LULUS' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                   {viewDetailModal.keterangan}
-                 </span>
-               </div>
-            </div>
-
             <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/50">
               <div className="space-y-3">
                 {viewDetailModal.data.length === 0 ? <p className="text-center py-20 text-slate-400 font-bold text-sm">Data detail jawaban belum sinkron dari server.</p> : 
@@ -691,6 +960,36 @@ export default function AdminDashboard() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL DETAIL JAWABAN ESAI WAWANCARA --- */}
+      {viewWawancaraModal.isOpen && viewWawancaraModal.data && (
+        <div className="fixed inset-0 bg-[#1A1A1B]/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[24px] w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl animate-scale-in overflow-hidden border border-slate-200">
+            <div className="p-6 border-b-2 border-blue-500 flex justify-between items-center shrink-0 bg-white">
+              <div>
+                <h3 className="font-black text-xl text-blue-600 uppercase tracking-tight">Detail Jawaban Esai</h3>
+                <p className="text-xs font-bold text-slate-500 mt-1">{viewWawancaraModal.data.nama_peserta} | <span className="font-mono">{viewWawancaraModal.data.email}</span></p>
+              </div>
+              <button onClick={() => setViewWawancaraModal({ isOpen: false, data: null })} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors text-slate-500 hover:text-black"><X size={20}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50">
+              <div className="space-y-4">
+                {viewWawancaraModal.data.qa.map((item, idx) => (
+                  <div key={idx} className="p-5 rounded-[16px] border border-slate-200 bg-white hover:border-blue-300 transition-colors shadow-sm">
+                      <p className="font-bold text-slate-800 text-sm mb-3 leading-relaxed border-b border-slate-100 pb-3"><span className="text-blue-500 font-black mr-2">Q{idx+1}.</span>{item.pertanyaan}</p>
+                      <div className="text-sm font-medium text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed whitespace-pre-wrap">
+                        {item.jawaban}
+                      </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-4 bg-white border-t border-slate-200 flex justify-end">
+               <button onClick={() => exportWawancaraToPDF(viewWawancaraModal.data)} className="bg-[#1A1A1B] text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest shadow-md hover:bg-black transition-colors flex items-center gap-2"><Printer size={16}/> Cetak & Unduh Esai</button>
             </div>
           </div>
         </div>
@@ -752,7 +1051,7 @@ export default function AdminDashboard() {
         
         <div className="flex gap-2 items-center">
           <button onClick={fetchData} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 px-3 md:px-4 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs font-black transition-colors shadow-sm">
-            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest"></span>
+            <RefreshCw className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Segarkan</span>
           </button>
           <button onClick={handleLogout} className="flex items-center gap-2 bg-[#1A1A1B] text-white hover:text-[#facc15] px-4 py-2.5 rounded-xl text-xs font-black transition-colors shadow-md hover:shadow-lg">
             <LogOut className="w-3.5 h-3.5" /> <span className="hidden md:inline uppercase tracking-widest">Keluar</span>
@@ -767,15 +1066,15 @@ export default function AdminDashboard() {
           <div className="flex-1 py-6 flex flex-col gap-2 px-3 overflow-y-auto custom-scrollbar">
             {[
               { id: 'dashboard', icon: <LayoutDashboard size={18}/>, label: 'Dashboard' },
+              { id: 'rekap', icon: <Layers size={18}/>, label: 'Rangkuman Hasil' },
               { id: 'peserta', icon: <Users size={18}/>, label: 'Data Peserta' },
-              { id: 'petugas', icon: <UserCheck size={18}/>, label: 'Data Petugas' },
               { id: 'soal', icon: <Database size={18}/>, label: 'Soal Ujian' },
-              { id: 'soal_wawancara', icon: <MessageCircle size={18}/>, label: 'Soal Wawancara' },
+              { id: 'soal_wawancara', icon: <MessageCircle size={18}/>, label: 'Soal Esai' },
               { id: 'hasil', icon: <FileSpreadsheet size={18}/>, label: 'Hasil Ujian' },
-              { id: 'hasil_wawancara', icon: <ClipboardList size={18}/>, label: 'Hasil Wawancara' },
+              { id: 'hasil_wawancara', icon: <ClipboardList size={18}/>, label: 'Hasil Esai' },
               { id: 'sesi', icon: <Activity size={18}/>, label: 'Sesi Aktif' },
               { id: 'remedial', icon: <RefreshCw size={18}/>, label: 'Remedial' },
-              { id: 'pengaturan', icon: <Settings size={18}/>, label: 'Akun' }
+              { id: 'pengaturan', icon: <Settings size={18}/>, label: 'Pengaturan' }
             ].map(m => (
               <button key={m.id} onClick={() => { setActiveTab(m.id); if(window.innerWidth < 768) setIsSidebarOpen(false); }} 
                 className={`flex items-center gap-4 p-3.5 rounded-xl font-bold text-sm transition-all group ${activeTab === m.id ? 'bg-[#facc15] text-[#1A1A1B] shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
@@ -833,17 +1132,20 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* SATU BARCHART TERPADU UNTUK 12 KECAMATAN */}
                 <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 p-6 md:p-8">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Tiap Kecamatan</h3>
+                      <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><TrendingUp className="text-blue-500"/> Progress Terpadu Kecamatan</h3>
                       <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Kabupaten Pacitan</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
+                      {/* Filter Search */}
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
                         <input type="text" placeholder="Cari kecamatan..." value={dashFilter} onChange={e => setDashFilter(e.target.value)} className="w-full sm:w-40 pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/>
                       </div>
+                      {/* Filter Sort */}
                       <select value={dashSort} onChange={e => setDashSort(e.target.value)} className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 outline-none focus:border-black cursor-pointer text-slate-600">
                          <option value="nama_asc">Nama (A-Z)</option>
                          <option value="nama_desc">Nama (Z-A)</option>
@@ -852,6 +1154,7 @@ export default function AdminDashboard() {
                          <option value="lulus_desc">Lulus Tertinggi</option>
                          <option value="lulus_asc">Lulus Terendah</option>
                       </select>
+                      {/* Legend */}
                       <div className="hidden md:flex items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
                         <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#1A1A1B]"></div> Mengerjakan</span>
                         <span className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded bg-[#facc15]"></div> Lulus</span>
@@ -867,6 +1170,108 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+              </div>
+            )}
+
+            {/* 🚀 TAB CONTENT: REKAP TERPADU */}
+            {activeTab === 'rekap' && (
+              <div className="space-y-6 animate-fade-up">
+                
+                <div className="bg-white rounded-[24px] overflow-hidden border border-slate-200 shadow-sm flex flex-col">
+                  
+                  {/* BARIS FILTER */}
+                  <div className="px-6 py-5 border-b border-slate-100 flex flex-col space-y-4 bg-white">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekapitulasi Keseluruhan (PG & Esai)</h3>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={exportRekapToCSV} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors uppercase tracking-widest shadow-md active:scale-95"><DownloadCloud size={16}/> CSV Rekap</button>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div className="relative w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/>
+                        <input type="text" placeholder="Cari nama/email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/>
+                      </div>
+                      <select value={filterStatusRekap} onChange={e => setFilterStatusRekap(e.target.value)} className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 outline-none focus:border-black cursor-pointer text-slate-600">
+                         <option value="ALL">- Semua Status Akhir -</option>
+                         <option value="SELESAI SEMUA">Selesai Semua (Lulus PG & Sudah Esai)</option>
+                         <option value="LULUS PG (BELUM ESAI)">Lulus PG (Belum Esai)</option>
+                         <option value="GAGAL PG">Gagal PG</option>
+                         <option value="BELUM MULAI">Belum Mulai Sama Sekali</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
+                      <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 sticky top-0 z-10 border-b-2 border-slate-800">
+                        <tr>
+                          <th className="px-6 py-4 w-10 text-center">No</th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama')}>Peserta <SortIcon columnKey="nama"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('kecamatan')}>Kecamatan <SortIcon columnKey="kecamatan"/></th>
+                          <th className="px-6 py-4 text-center cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('skorPG')}>Skor PG <SortIcon columnKey="skorPG"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('statusPG')}>Status PG <SortIcon columnKey="statusPG"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('statusEsai')}>Status Esai <SortIcon columnKey="statusEsai"/></th>
+                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('statusAkhir')}>Status Akhir <SortIcon columnKey="statusAkhir"/></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {currentRekap.map((row, idx) => {
+                          const actualIdx = (currentPage - 1) * itemsPerPage + idx + 1;
+                          
+                          // Pewarnaan Label Status Akhir
+                          let akhirLabelColor = "bg-slate-100 text-slate-500 border-slate-200";
+                          if (row.statusAkhir === 'SELESAI SEMUA') akhirLabelColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
+                          if (row.statusAkhir === 'LULUS PG (BELUM ESAI)') akhirLabelColor = "bg-blue-50 text-blue-600 border-blue-200";
+                          if (row.statusAkhir === 'GAGAL PG') akhirLabelColor = "bg-red-50 text-red-600 border-red-200";
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                              <td className="px-6 py-3 text-center font-bold text-slate-300 text-xs">{actualIdx}</td>
+                              <td className="px-6 py-3">
+                                <p className="font-bold text-[13px] text-slate-800 mb-0.5">{row.nama}</p>
+                                <p className="text-[10px] text-slate-400 font-mono">{row.email}</p>
+                              </td>
+                              <td className="px-6 py-3">
+                                <p className="text-xs font-semibold text-slate-600">{row.kecamatan || '-'}</p>
+                                <p className="text-[10px] text-slate-400">{row.desa || '-'}</p>
+                              </td>
+                              <td className="px-6 py-3 text-sm font-black text-center text-[#1A1A1B]">{row.skorPG}</td>
+                              <td className="px-6 py-3">
+                                {row.statusPG === 'LULUS' ? (
+                                  <span className="font-black text-[10px] text-emerald-600">LULUS PG</span>
+                                ) : row.statusPG === 'TIDAK LULUS' ? (
+                                  <span className="font-black text-[10px] text-red-600">GAGAL PG</span>
+                                ) : (
+                                  <span className="font-bold text-[10px] text-slate-400">BELUM UJIAN</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-3">
+                                {row.statusEsai === 'SUDAH ESAI' ? (
+                                  <span className="font-black text-[10px] text-blue-600">SUDAH ESAI</span>
+                                ) : (
+                                  <span className="font-bold text-[10px] text-slate-400">BELUM ESAI</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-3">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded border text-[9px] font-black uppercase tracking-widest ${akhirLabelColor}`}>
+                                  {row.statusAkhir}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {currentRekap.length === 0 && <tr><td colSpan="7" className="p-10 text-center text-slate-400 font-medium text-sm">Data tidak ditemukan.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                  {totalPagesRekap > 0 && (
+                    <PaginationFooter currentPage={currentPage} totalPages={totalPagesRekap} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
+                  )}
+                </div>
               </div>
             )}
 
@@ -963,60 +1368,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB CONTENT: DATA PETUGAS WAWANCARA */}
-            {activeTab === 'petugas' && (
-              <div className="space-y-6 animate-fade-up">
-                <div className="bg-white p-6 md:p-8 rounded-[24px] shadow-sm border border-slate-200">
-                   <h3 className="font-black text-base text-[#1A1A1B] mb-5 uppercase tracking-tight flex items-center gap-2"><UserCheck size={20} className="text-[#facc15]"/> Tambah Petugas Wawancara</h3>
-                   <form onSubmit={handleAddPetugas} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                     <input required type="text" placeholder="Nama Lengkap Petugas" value={newPetugas.nama_petugas} onChange={e => setNewPetugas({...newPetugas, nama_petugas: e.target.value})} className="px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-black text-sm font-semibold transition-colors" />
-                     <input required type="email" placeholder="Email Akses Petugas" value={newPetugas.email_petugas} onChange={e => setNewPetugas({...newPetugas, email_petugas: e.target.value})} className="px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-black text-sm font-semibold transition-colors" />
-                     <button type="submit" className="bg-[#1A1A1B] hover:bg-black text-[#facc15] font-black py-3.5 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95"><UserPlus size={16}/> Daftarkan</button>
-                   </form>
-                </div>
-
-                <div className="bg-white rounded-[24px] shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                   <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-                      <h3 className="font-black text-slate-800 text-base uppercase tracking-tight">Database Petugas ({daftarPetugas.length})</h3>
-                      <button onClick={() => window.open('/wawancara', '_blank')} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white border border-blue-200 px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-all uppercase tracking-widest shadow-sm">
-                        Portal Wawancara <ChevronRight size={12}/>
-                      </button>
-                   </div>
-                   <div className="overflow-x-auto custom-scrollbar">
-                     <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
-                       <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 border-b-2 border-slate-800 sticky top-0 z-10">
-                         <tr>
-                           <th className="px-6 py-4 w-12 text-center">No</th>
-                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_petugas')}>Nama Petugas <SortIcon columnKey="nama_petugas"/></th>
-                           <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('email_petugas')}>Email Akses <SortIcon columnKey="email_petugas"/></th>
-                           <th className="px-6 py-4 text-right">Opsi</th>
-                         </tr>
-                       </thead>
-                       <tbody className="divide-y divide-slate-100">
-                         {currentPetugas.map((p, i) => {
-                           const actualIdx = (currentPage - 1) * itemsPerPage + i + 1;
-                           return (
-                             <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                               <td className="px-6 py-3 text-center font-bold text-slate-400 text-xs">{actualIdx}</td>
-                               <td className="px-6 py-3 font-bold text-slate-800 text-[13px]">{p.nama_petugas || '-'}</td>
-                               <td className="px-6 py-3 text-[11px] font-mono text-slate-500">{p.email_petugas}</td>
-                               <td className="px-6 py-3 text-right">
-                                 <button onClick={() => requestDeletePetugas(p.email_petugas)} className="p-2 text-slate-400 hover:text-white rounded-lg border border-transparent hover:bg-red-500 hover:border-red-600 transition-all"><Trash2 size={16}/></button>
-                               </td>
-                             </tr>
-                           )
-                         })}
-                         {currentPetugas.length === 0 && <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-medium text-sm">Belum ada data petugas yang terdaftar.</td></tr>}
-                       </tbody>
-                     </table>
-                   </div>
-                   {totalPagesPetugas > 0 && (
-                     <PaginationFooter currentPage={currentPage} totalPages={totalPagesPetugas} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
-                   )}
-                </div>
-              </div>
-            )}
-
             {/* TAB CONTENT: HASIL UJIAN PG */}
             {activeTab === 'hasil' && (
               <div className="space-y-6 animate-fade-up">
@@ -1031,14 +1382,14 @@ export default function AdminDashboard() {
 
                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
                     <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahLulus}</p></div>
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Lulus PG</p><p className="text-3xl font-black text-[#1A1A1B]">{jumlahLulus}</p></div>
                       <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><CheckCircle2 size={20}/></div>
                     </div>
                   </div>
 
                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group">
                     <div className="flex justify-between items-start mb-2">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tidak Lulus</p><p className="text-3xl font-black text-[#1A1A1B]">{totalGagal}</p></div>
+                      <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tidak Lulus PG</p><p className="text-3xl font-black text-[#1A1A1B]">{totalGagal}</p></div>
                       <div className="w-10 h-10 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><XCircle size={20}/></div>
                     </div>
                   </div>
@@ -1046,10 +1397,11 @@ export default function AdminDashboard() {
 
                 <div className="bg-white rounded-[24px] overflow-hidden border border-slate-200 shadow-sm flex flex-col">
                   
+                  {/* BARIS FILTER KOMPLEKS */}
                   <div className="px-6 py-5 border-b border-slate-100 flex flex-col space-y-4 bg-white">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-3">
-                        <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekapitulasi Ujian</h3>
+                        <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekapitulasi Ujian PG</h3>
                         <span className="bg-[#facc15] text-[#1A1A1B] px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-widest border border-yellow-400">PG: 70</span>
                       </div>
                       <div className="flex gap-2">
@@ -1138,62 +1490,122 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* TAB CONTENT: HASIL WAWANCARA */}
+            {/* TAB CONTENT: HASIL WAWANCARA (ESAI) */}
             {activeTab === 'hasil_wawancara' && (
               <div className="space-y-6 animate-fade-up">
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* 🚀 3 KOTAK STATISTIK BARU UNTUK ESAI WAWANCARA */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                    <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group flex items-center gap-4">
-                     <div className="w-12 h-12 bg-slate-100 text-slate-500 rounded-xl flex items-center justify-center group-hover:bg-[#1A1A1B] group-hover:text-white transition-colors"><ClipboardList size={20}/></div>
-                     <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Wawancara</p><p className="text-2xl font-black text-[#1A1A1B]">{hasilWawancara.length}</p></div>
+                     <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-colors"><ClipboardList size={20}/></div>
+                     <div><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Sudah Esai</p><p className="text-2xl font-black text-[#1A1A1B]">{groupedWawancaraArr.length}</p></div>
+                   </div>
+                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group flex items-center gap-4">
+                     <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors"><CheckCircle2 size={20}/></div>
+                     <div className="flex-1">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">% Dari Selesai PG</p>
+                       <div className="flex items-end justify-between">
+                         <p className="text-2xl font-black text-[#1A1A1B]">{adminData.length > 0 ? Math.round((groupedWawancaraArr.length / adminData.length) * 100) || 0 : 0}%</p>
+                         <span className="text-[10px] font-bold text-slate-400">{groupedWawancaraArr.length} / {adminData.length}</span>
+                       </div>
+                     </div>
+                   </div>
+                   <div className="bg-white p-5 rounded-[20px] shadow-sm border border-slate-200 hover:border-black transition-colors group flex items-center gap-4">
+                     <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-xl flex items-center justify-center group-hover:bg-orange-500 group-hover:text-white transition-colors"><Users size={20}/></div>
+                     <div className="flex-1">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">% Dari Total Pendaftar</p>
+                       <div className="flex items-end justify-between">
+                         <p className="text-2xl font-black text-[#1A1A1B]">{totalPendaftar > 0 ? Math.round((groupedWawancaraArr.length / daftarPeserta.length) * 100) || 0 : 0}%</p>
+                         <span className="text-[10px] font-bold text-slate-400">{groupedWawancaraArr.length} / {daftarPeserta.length}</span>
+                       </div>
+                     </div>
                    </div>
                 </div>
 
                 <div className="bg-white rounded-[24px] overflow-hidden border border-slate-200 shadow-sm flex flex-col">
                   <div className="px-6 py-5 border-b border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white">
                     <div className="flex items-center gap-3">
-                      <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekap Wawancara</h3>
+                      <h3 className="font-black text-base text-slate-800 uppercase tracking-tight">Rekap Hasil Esai</h3>
                     </div>
-                    <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-                      <div className="relative flex-1 sm:w-64"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/><input type="text" placeholder="Cari nama peserta/petugas..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/></div>
-                      <button className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-xs font-black flex items-center gap-2 transition-colors uppercase tracking-widest shadow-md active:scale-95"><DownloadCloud size={16}/> CSV</button>
+                    <div className="flex flex-wrap gap-3 w-full lg:w-auto items-center">
+                      <div className="relative flex-1 sm:w-56"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14}/><input type="text" placeholder="Cari nama atau email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:border-black outline-none font-semibold transition-colors"/></div>
+                      
+                      <select value={filterEsaiView} onChange={e => {setFilterEsaiView(e.target.value); setCurrentPage(1);}} className="text-xs font-bold border border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 outline-none focus:border-black cursor-pointer text-slate-600">
+                         <option value="sudah">Tampilkan: Sudah Esai</option>
+                         <option value="belum">Tampilkan: Belum Esai (Sudah PG)</option>
+                      </select>
                     </div>
                   </div>
 
                   <div className="overflow-x-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse whitespace-nowrap min-w-max">
                       <thead className="bg-slate-50 text-[10px] uppercase font-black tracking-widest text-slate-500 sticky top-0 z-10 border-b-2 border-slate-800">
-                        <tr>
-                          <th className="px-6 py-4 w-10 text-center">No</th>
-                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_peserta')}>Peserta <SortIcon columnKey="nama_peserta"/></th>
-                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_petugas')}>Petugas <SortIcon columnKey="nama_petugas"/></th>
-                          <th className="px-6 py-4 max-w-[200px] cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('pertanyaan')}>Pertanyaan <SortIcon columnKey="pertanyaan"/></th>
-                          <th className="px-6 py-4 max-w-[250px] cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('jawaban')}>Jawaban <SortIcon columnKey="jawaban"/></th>
-                          <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('keterangan')}>Status <SortIcon columnKey="keterangan"/></th>
-                        </tr>
+                        {filterEsaiView === 'sudah' ? (
+                          <tr>
+                            <th className="px-6 py-4 w-10 text-center">No</th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('waktu_selesai')}>Selesai <SortIcon columnKey="waktu_selesai"/></th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('email')}>Peserta <SortIcon columnKey="email"/></th>
+                            <th className="px-6 py-4 text-right">Opsi</th>
+                          </tr>
+                        ) : (
+                          <tr>
+                            <th className="px-6 py-4 w-10 text-center">No</th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('nama_peserta')}>Peserta (Belum Esai) <SortIcon columnKey="nama_peserta"/></th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('kecamatan')}>Kecamatan <SortIcon columnKey="kecamatan"/></th>
+                            <th className="px-6 py-4 cursor-pointer hover:bg-slate-100 select-none" onClick={() => requestSort('desa')}>Desa <SortIcon columnKey="desa"/></th>
+                            <th className="px-6 py-4 text-center">Opsi</th>
+                          </tr>
+                        )}
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {currentHasilWawancara.map((row, idx) => {
-                          const actualIdx = (currentPage - 1) * itemsPerPage + idx + 1;
-                          return (
-                            <tr key={idx} className="hover:bg-slate-50 transition-colors group">
-                              <td className="px-6 py-3 text-center font-bold text-slate-300 text-xs">{actualIdx}</td>
-                              <td className="px-6 py-3 font-bold text-[13px] text-slate-800">{row.nama_peserta}</td>
-                              <td className="px-6 py-3 text-[11px] font-mono text-slate-500">{row.nama_petugas}</td>
-                              <td className="px-6 py-3 text-xs text-slate-600 max-w-[200px] truncate">{row.pertanyaan}</td>
-                              <td className="px-6 py-3 text-xs text-slate-600 max-w-[250px] truncate">{row.jawaban}</td>
-                              <td className="px-6 py-3">
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-700">{row.keterangan || '-'}</span>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                        {currentHasilWawancara.length === 0 && <tr><td colSpan="6" className="p-10 text-center text-slate-400 font-medium text-sm">Belum ada data hasil wawancara yang ditarik dari server.</td></tr>}
+                        {filterEsaiView === 'sudah' ? (
+                           currentHasilWawancara.map((row, idx) => {
+                             const actualIdx = (currentPage - 1) * itemsPerPage + idx + 1;
+                             return (
+                               <tr key={idx} className="hover:bg-slate-50 transition-colors group">
+                                 <td className="px-6 py-3 text-center font-bold text-slate-300 text-xs">{actualIdx}</td>
+                                 <td className="px-6 py-3 text-[11px] text-slate-500 font-mono">{row.waktu_selesai}</td>
+                                 <td className="px-6 py-3">
+                                   <p className="font-bold text-[13px] text-slate-800 mb-0.5">{row.nama_peserta}</p>
+                                   <p className="text-[10px] text-slate-400 font-mono">{row.email}</p>
+                                 </td>
+                                 <td className="px-6 py-3 text-right">
+                                    <div className="flex justify-end gap-1.5 opacity-50 group-hover:opacity-100 transition-opacity">
+                                       <button onClick={() => setViewWawancaraModal({ isOpen: true, data: row })} className="bg-white border border-slate-200 text-slate-500 hover:text-black hover:border-black px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-colors uppercase tracking-widest shadow-sm"><FileText size={14}/> Lihat Esai</button>
+                                       <button onClick={() => exportWawancaraToPDF(row)} className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-colors uppercase tracking-widest shadow-md"><Printer size={14}/> PDF</button>
+                                       <button onClick={() => requestDeleteWawancara(row.email)} className="bg-red-50 text-red-600 hover:bg-red-500 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1.5 transition-colors uppercase tracking-widest shadow-sm"><Trash2 size={14}/> Hapus</button>
+                                    </div>
+                                 </td>
+                               </tr>
+                             )
+                           })
+                        ) : (
+                           currentBelumWawancara.map((row, idx) => {
+                             const actualIdx = (currentPage - 1) * itemsPerPage + idx + 1;
+                             return (
+                               <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                 <td className="px-6 py-3 text-center font-bold text-slate-300 text-xs">{actualIdx}</td>
+                                 <td className="px-6 py-3">
+                                   <p className="font-bold text-[13px] text-slate-800 mb-0.5">{row.nama_peserta}</p>
+                                   <p className="text-[10px] text-slate-400 font-mono">{row.email}</p>
+                                 </td>
+                                 <td className="px-6 py-3 text-xs font-semibold text-slate-600">{row.kecamatan}</td>
+                                 <td className="px-6 py-3 text-xs font-semibold text-slate-600">{row.desa}</td>
+                                 <td className="px-6 py-3 text-center">
+                                    <span className="px-3 py-1 border border-orange-200 bg-orange-50 text-orange-600 rounded-md text-[9px] font-black uppercase tracking-widest">Belum Mengisi</span>
+                                 </td>
+                               </tr>
+                             )
+                           })
+                        )}
+                        
+                        {filterEsaiView === 'sudah' && currentHasilWawancara.length === 0 && <tr><td colSpan="4" className="p-10 text-center text-slate-400 font-medium text-sm">Belum ada data esai yang ditarik dari server.</td></tr>}
+                        {filterEsaiView === 'belum' && currentBelumWawancara.length === 0 && <tr><td colSpan="5" className="p-10 text-center text-slate-400 font-medium text-sm">Luar biasa! Semua peserta lulusan PG sudah mengisi esai.</td></tr>}
                       </tbody>
                     </table>
                   </div>
-                  {totalPagesWawancara > 0 && (
-                     <PaginationFooter currentPage={currentPage} totalPages={totalPagesWawancara} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
+                  {activeWawancaraTotalPages > 0 && (
+                     <PaginationFooter currentPage={currentPage} totalPages={activeWawancaraTotalPages} setCurrentPage={setCurrentPage} itemsPerPage={itemsPerPage} setItemsPerPage={setItemsPerPage} />
                   )}
                 </div>
               </div>
@@ -1330,7 +1742,7 @@ export default function AdminDashboard() {
             {activeTab === 'remedial' && (
               <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm flex flex-col h-[75vh] animate-fade-up">
                 <div className="p-6 border-b border-slate-100 bg-white">
-                  <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight">Manajemen Remedial</h3>
+                  <h3 className="font-black text-base text-[#1A1A1B] uppercase tracking-tight">Manajemen Remedial PG</h3>
                   <p className="text-xs text-slate-500 font-medium mt-2 max-w-md leading-relaxed">Hapus nilai lama untuk membuka gerbang ujian ulang bagi peserta dengan status <span className="font-bold text-red-500">Tidak Lulus</span>.</p>
                 </div>
                 <div className="overflow-x-auto flex-1 custom-scrollbar flex flex-col">

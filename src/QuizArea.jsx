@@ -512,18 +512,60 @@ export default function QuizArea() {
     return (
       <div className="h-[100dvh] w-screen flex items-center justify-center p-4 relative bg-transparent">
         <div className="max-w-[450px] w-full bg-white/95 backdrop-blur-3xl rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 text-center animate-fade-up border border-white shadow-2xl">
-          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-sm"><CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500" /></div>
-          <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-2 sm:mb-3 tracking-tight">Berhasil Terkirim!</h1>
-          <p className="text-slate-500 text-xs sm:text-sm mb-6 sm:mb-8 font-medium leading-relaxed">Terima kasih telah mengikuti Uji Kompetensi Mitra Tambahan 2026. Bukti pengerjaan telah diamankan.</p>
-          <div className="text-left bg-slate-50 p-4 sm:p-6 rounded-[16px] sm:rounded-[24px] mb-6 sm:mb-8 border border-slate-100">
-             <div className="flex justify-between border-b border-slate-200/50 pb-2 sm:pb-3 mb-2 sm:mb-3 items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Peserta</span><span className="text-[10px] sm:text-xs font-black text-slate-800 truncate pl-2">{user.email}</span></div>
-             <div className="flex justify-between items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span><span className="text-[10px] sm:text-xs font-black text-slate-800">{getLocalTime().split(' ')[1]} WIB</span></div>
+          <div className="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-sm">
+            <CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500" />
           </div>
-          <button onClick={handleKeluar} className="w-full bg-[#1A1A1B] hover:bg-black text-white font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl flex justify-center gap-2 sm:gap-3 items-center uppercase tracking-widest text-[10px] sm:text-xs transition-all shadow-xl">Ke Beranda <LogOut size={14}/></button>
+          
+          <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-2 sm:mb-3 tracking-tight">Tahap 1 Terkirim!</h1>
+          
+          <p className="text-slate-500 text-xs sm:text-sm mb-6 sm:mb-8 font-medium leading-relaxed">
+            Terima kasih, jawaban Uji Kompetensi Anda telah berhasil diamankan di server BPS.
+            <br/><br/>
+            <span className="font-bold text-red-500 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 inline-block">
+              ⚠️ JANGAN KELUAR DULU!
+            </span>
+            <br/>Silakan klik tombol di bawah ini untuk melanjutkan ke tahap berikutnya.
+          </p>
+
+          <div className="text-left bg-slate-50 p-4 sm:p-6 rounded-[16px] sm:rounded-[24px] mb-6 sm:mb-8 border border-slate-100">
+             <div className="flex justify-between border-b border-slate-200/50 pb-2 sm:pb-3 mb-2 sm:mb-3 items-center">
+               <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Peserta</span>
+               <span className="text-[10px] sm:text-xs font-black text-slate-800 truncate pl-2">{user.email}</span>
+             </div>
+             <div className="flex justify-between items-center">
+               <span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai </span>
+               <span className="text-[10px] sm:text-xs font-black text-slate-800">{getLocalTime().split(' ')[1]} WIB</span>
+             </div>
+          </div>
+          
+          {/* Tombol Lanjut dengan efek kedap-kedip (pulse) tipis agar menarik perhatian */}
+          <button 
+            onClick={() => navigate('/wawancara', { state: location.state })} 
+            className="w-full bg-[#1A1A1B] hover:bg-black text-[#facc15] font-black py-4 rounded-[14px] sm:rounded-2xl flex justify-center gap-2 sm:gap-3 items-center uppercase tracking-widest text-[10px] sm:text-xs transition-all shadow-xl hover:scale-[1.02]"
+          >
+             Lanjut Tahap 2: Tes Wawancara <ArrowRight size={16}/>
+          </button>
         </div>
       </div>
     );
   }
+
+  // if (view === 'result') {
+  //   return (
+  //     <div className="h-[100dvh] w-screen flex items-center justify-center p-4 relative bg-transparent">
+  //       <div className="max-w-[450px] w-full bg-white/95 backdrop-blur-3xl rounded-[32px] sm:rounded-[40px] p-6 sm:p-10 text-center animate-fade-up border border-white shadow-2xl">
+  //         <div className="w-20 h-20 sm:w-24 sm:h-24 bg-emerald-50 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-4 sm:mb-6 shadow-sm"><CheckCircle className="w-10 h-10 sm:w-12 sm:h-12 text-emerald-500" /></div>
+  //         <h1 className="text-xl sm:text-3xl font-black text-slate-800 mb-2 sm:mb-3 tracking-tight">Berhasil Terkirim!</h1>
+  //         <p className="text-slate-500 text-xs sm:text-sm mb-6 sm:mb-8 font-medium leading-relaxed">Terima kasih telah mengikuti Uji Kompetensi Mitra Tambahan 2026. Bukti pengerjaan telah diamankan.</p>
+  //         <div className="text-left bg-slate-50 p-4 sm:p-6 rounded-[16px] sm:rounded-[24px] mb-6 sm:mb-8 border border-slate-100">
+  //            <div className="flex justify-between border-b border-slate-200/50 pb-2 sm:pb-3 mb-2 sm:mb-3 items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Peserta</span><span className="text-[10px] sm:text-xs font-black text-slate-800 truncate pl-2">{user.email}</span></div>
+  //            <div className="flex justify-between items-center"><span className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Waktu Selesai</span><span className="text-[10px] sm:text-xs font-black text-slate-800">{getLocalTime().split(' ')[1]} WIB</span></div>
+  //         </div>
+  //         <button onClick={handleKeluar} className="w-full bg-[#1A1A1B] hover:bg-black text-white font-black py-3.5 sm:py-4 rounded-[14px] sm:rounded-2xl flex justify-center gap-2 sm:gap-3 items-center uppercase tracking-widest text-[10px] sm:text-xs transition-all shadow-xl">Ke Beranda <LogOut size={14}/></button>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   return null;
 }
